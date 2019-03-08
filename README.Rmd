@@ -1,0 +1,461 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r setup, include = FALSE, error=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      comment = "#>",
+                      collapse = TRUE,
+                      error = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.align = 'center'
+                      )
+```
+
+
+# volve-reservoir-model-evolution
+
+```{r read-prt-file}
+library(dplyr)
+library(ggplot2)
+
+# read the Eclipse PRT output report
+proj_root <- rprojroot::find_rstudio_root_file()
+# had to zip the PRT file because it's 225 MB and too big for Github
+volve_2016_zip <- file.path(proj_root, "inst/rawdata", "VOLVE_2016.zip")
+temp <- tempdir()
+
+volve_2016_txt <- readLines(unzip(volve_2016_zip, exdir = temp))
+```
+
+
+```{r}
+# get a list of rows from " STEP" 
+
+# find the rows where we find the word " STEP"
+step_rows <- grep("^ STEP", volve_2016_txt)
+
+# add rows ahead to where the keyword was found
+step_info_range <- lapply(seq_along(step_rows), function(x) 
+    c(step_rows[x], step_rows[x]+1:2))               # add two extra row indices
+
+step_info_range[[1]]   # sample for report page 1 only
+```
+
+These extra row indices are lines of text where the report keep more information of the evolution of the simulation. Here is a couple of screenhots.
+
+Step at day `1`:
+
+```{r, out.width = "600px", fig.cap="Step at 1 day", echo=FALSE}
+knitr::include_graphics("img/step_0001.png")
+```
+
+Step at day `3,197`:
+
+```{r, out.width = "600px", fig.cap="Step at 3197 days", , echo=FALSE}
+knitr::include_graphics("img/step_3197.png")
+```
+
+Now, knowing the row indices for the text we need from the `PRT` file, we can proceed to extracting those lines of text and putting them in a list, one page, or one step, per list element. We do this to later iterate through all the steps and extract the data we want.
+
+
+```{r}
+# get the text from all pages and put them in a list
+steps_info_txt_pages <- lapply(seq_along(step_info_range), function(x) 
+    volve_2016_txt[step_info_range[[x]]])
+```
+
+
+## Extracting step data from the text file
+ 
+### Extract the days
+Although we could extract all the data we require from the text file in one go, it is better to see one or two examples of seeing __regular expressions__ or __regex__ at work. Regular expressions are practically available to all programming languages: C++, Java, JavaScript, Python, Perl, etc.
+
+In this first example, we will extract the number of days at the current simulation step. If this is the first step page:
+
+```
+ STEP    1 TIME=      1.00  DAYS (    +1.0  DAYS INIT  5 ITS) (1-JAN-2008)       
+  PAV=   329.6  BARSA  WCT= 0.00 GOR= 0.00000   SM3/SM3 WGR= 0.00000   SM3/SM3
+```
+
+to extract the days we have to provide a regex pattern that detects a real number like `1.00`, which is `".*?(\\d+.\\d.)+.*"`.
+
+__Explanation__
+
+* `.*?` will match any characters. lazy matching.
+* `(\\d+.\\d.)` capturing group. 
+* `\\d+` matches any number of digits
+* `\\d.` matches a digit and then any character
+    
+
+```{r rows.print=20}
+# iterate through the list of STEP pages
+days_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page <- steps_info_txt_pages[[x]]   # put all pages text in a list
+    days_row_txt <- page[1]                                # get 1st row of page
+    days_value <- sub(".*?(\\d+.\\d.)+.*", "\\1", days_row_txt,
+                      perl = TRUE) # extract the days
+    
+    # dataframe; days as double; no factors.
+    data.frame(days = as.double(days_value), stringsAsFactors = FALSE) 
+})
+
+days_df <- do.call("rbind", days_dfs)
+rbind(head(days_df, 10), tail(days_df, 10))   # show the first 10 and last 10 rows
+```
+
+### Extract the date 
+
+This regular expresion pattern extracts the date from the current text line.
+
+__Explanation__  
+* `.*?(\\d{1,2}-[A-Z]{3}-\\d{4}).` entire regex pattern   
+* `(\\d{1,2}-[A-Z]{3}-\\d{4})` parenthesis indicate a group to extract the date   
+* `.*?` match any character   
+*  `\\d{1,2}` match one or two digits (day)   
+* `-[A-Z]{3}` match a dash followed by three letters (month)   
+* `-\\d{4}` match four digits (year)   
+
+
+```{r rows.print=20}
+# iterate through the list of pages: dates
+date_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page <- steps_info_txt_pages[[x]]  # put all pages text in a list
+    date_row_txt <- grep(" STEP", page)  # get row index at word STEP
+    date_value <- sub(".*?(\\d{1,2}-[A-Z]{3}-\\d{4}).", "\\1", page[date_row_txt])
+    
+    # dataframe; no factors
+    data.frame(date = date_value, stringsAsFactors = FALSE) 
+})
+
+date_df <- do.call("rbind", date_dfs)
+
+# size of the dataframe: rows by columns
+dim(date_df)
+
+rbind(head(date_df, 10), tail(date_df, 10))   # show the first 10 and last 10 rows
+``` 
+
+## Extract values from the __STEP__ block
+After show this pair of example we continue with the extraction of the rest of the values. These are variables to be extracted:
+
+* `STEP`  simulation step number
+* `TIME`  number of days elpased at the simulation step
+* `date`  current date at the simulation run
+* `PAV`  average pressure
+* `WCT`  watercut
+* `GOR`  gas oil ratio
+* `WGR`  water gas ratio
+
+
+The mission here is to extract all the variables that are made available by the simulator in the STEP block. As shown above, they are seven variables. 
+
+```{r rows.print=50}
+library(lubridate)
+
+# get the row indices where we find the keyword " STEP"
+step_rows <- grep("^ STEP", volve_2016_txt)
+
+# get rows ahead range. by block of text or per page
+# in the case of the STEP block we are only interested in the next two rows
+step_info_range <- lapply(seq_along(step_rows), function(x) 
+    c(step_rows[x], step_rows[x]+1:2))
+
+# get the text from all STEP pages and store each in a list element
+steps_info_txt_pages <- lapply(seq_along(step_info_range), function(x) 
+    volve_2016_txt[step_info_range[[x]]])
+
+# iterate through the list of pages for the STEP blocks in the report
+step_info_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page <- steps_info_txt_pages[[x]]             # load a STEP block/page
+    
+    # this is line 1
+    row_txt <- grep(" STEP", page)  # line 1 starts with STEP
+    # pattern extraction for 1st line of text: STEP, TIME, date
+    line_1_pattern <- ".*?(\\d+)+.*?(\\d+.\\d+)+.*?(\\d+)+.*?(\\d{1,2}-[A-Z]{3}-\\d{4})+.*"
+    step_value <- sub(line_1_pattern, "\\1", page[row_txt], perl = TRUE) # extract step
+    days_value <- sub(line_1_pattern, "\\2", page[row_txt], perl = TRUE) # extract days
+    date_value <- sub(line_1_pattern, "\\4", page[row_txt], perl = TRUE) # extract date
+    
+    
+    # this is line 2
+    row_txt <- grep(" PAV", page) # line 2 starts with PAV=
+    # pattern extraction for 2nd line of text: PAV, WCT, GOR, WGR
+    line_2_pattern <- ".*?(\\d+.\\d+)+.*?(\\d+.\\d+)+.*?(\\d+.\\d+)+.*?(\\d+.\\d+).*"
+    pav_value <- sub(line_2_pattern, "\\1", page[row_txt], perl = TRUE) # Get avg pres
+    wct_value <- sub(line_2_pattern, "\\2", page[row_txt], perl = TRUE) # get WCT
+    gor_value <- sub(line_2_pattern, "\\3", page[row_txt], perl = TRUE) # get GOR
+    wgr_value <- sub(line_2_pattern, "\\4", page[row_txt], perl = TRUE) # get WGR
+    
+    # dataframe; 
+    data.frame(step = as.integer(step_value), 
+               date = dmy(date_value), 
+               time_days = as.double(days_value), 
+               pav_bar   = as.double(pav_value),
+               wct_pct   = as.double(wct_value),
+               gor_m3m3  = as.double(gor_value), 
+               wgr_m3m3  = as.double(wgr_value),
+               stringsAsFactors = FALSE) 
+})
+
+step_info <- do.call("rbind", step_info_dfs) # put together all dataframes in list
+
+# show a summary of the dataframe
+glimpse(step_info)
+``` 
+
+```{r}
+# first ten rows
+as_tibble(step_info)
+```
+
+Let's test the first day and last day of the simulation:
+
+```{r}
+tail(step_info$date,1) - head(step_info$date,1)
+```
+
+### Plot pressure vs time
+
+```{r}
+ggplot(step_info, aes(x =date, y = pav_bar)) +
+    geom_line()
+```
+
+
+## Merge cumulative oil wth simulator steps
+
+```{r}
+
+```
+
+
+```{r rows.print=25}
+library(dplyr)
+library(lubridate)
+
+# find the rows where we find the word "BALANCE  AT"
+balance_rows <- grep("^.*BALANCE  AT", volve_2016_txt)
+
+# add rows ahead to where the word BALANCE AT was found
+field_totals_range <- lapply(seq_along(balance_rows), function(x) 
+    c(balance_rows[x], balance_rows[x]+1:21))
+
+# try different strategy
+# iterating through the report pages in FIELD TOTALS
+# get:
+#    days, oil currently in place, oil originally in place, 
+#    oil outflow through wells
+
+# get the text from all pages and put them in a list
+field_totals_report_txt <- lapply(seq_along(field_totals_range), function(x) 
+    volve_2016_txt[field_totals_range[[x]]])
+
+# iterate through the list of pages
+field_totals_dfs <- lapply(seq_along(field_totals_report_txt), function(x) {
+    page <- field_totals_report_txt[[x]]  # put all pages text in a list
+    days_row_txt <- page[1] # get 1st row of page
+    days_value <- sub(".*?(\\d+.\\d.)+.*", "\\1", days_row_txt) # extract the days
+    
+    # get the date
+    date_row_txt <- grep("^.*REPORT", page)
+    date_value <- sub(".*?(\\d{1,2} [A-Z]{3} \\d{4})+.*", "\\1", page[date_row_txt])
+    date_value <- sub("JLY", "JUL", date_value)  # change JLY by JUL
+    
+    # get oil currently in place
+    ocip_row_txt <- grep("^.*:CURRENTLY IN PLACE", page)
+    ocip_value <- sub(".*?(\\d+.)+.*", "\\1", page[ocip_row_txt])
+    
+    # get OOIP
+    ooip_row_txt <- grep("^.*:ORIGINALLY IN PLACE", page)
+    ooip_value <- sub(".*?(\\d+.)+.*", "\\1", page[ooip_row_txt])
+    
+    # get total fluid outflow through wells
+    otw_row_txt <- grep("^.*:OUTFLOW THROUGH WELLS", page) # row index at this line
+    otw_group_pattern <- ".*?(\\d+.)+.*?(\\d+.)+.*?(\\d+.)+.*"  # groups
+    oil_otw_value <- sub(otw_group_pattern, "\\1", page[otw_row_txt]) # get oil outflow
+    wat_otw_value <- sub(otw_group_pattern, "\\2", page[otw_row_txt]) # get gas outflow
+    gas_otw_value <- sub(otw_group_pattern, "\\3", page[otw_row_txt]) # get water
+    
+    # get pressure
+    pav_row_txt <- grep("PAV =", page)
+    pav_value <- sub(".*?(\\d+.\\d.)+.*", "\\1", page[pav_row_txt])
+    
+    # dataframe
+    data.frame(
+               date = dmy(date_value), 
+               days = as.integer(days_value), 
+               ocip = as.double(ocip_value), 
+               ooip = as.double(ooip_value), 
+               oil_otw = as.double(oil_otw_value),
+               wat_otw = as.double(wat_otw_value),
+               gas_otw = as.double(gas_otw_value), 
+               pav = as.double(pav_value),
+               stringsAsFactors = FALSE
+               ) 
+})
+
+(field_totals <- do.call("rbind", field_totals_dfs))
+```
+
+Now, we know that the STEP dataframe has more rows than the BALANCE-AT dataframe. What we want is to correlate the step with the oil cumulatives.
+
+```{r rows.print=50}
+step_totals <- 
+left_join(step_info, field_totals, by = "date") %>% 
+    na.omit() %>% 
+    select(date, time_days, days, everything()) %>% 
+    print
+```
+
+```{r}
+ggplot(step_totals, aes(x = date, y = oil_otw)) +
+    geom_line() +
+    ggtitle("Cumulative Oil, sm3", subtitle = "Simulator")
+```
+
+## Difference with historical production
+
+```{r}
+library(xlsx)   # library to read Excel files in R
+
+# read the Excel file
+proj_root <- rprojroot::find_rstudio_root_file()   # get the project root folder
+xl_file <- file.path(proj_root, "inst/rawdata", "Volve production data.xlsx")
+# read only the monthly production
+prod_hist <- read.xlsx(xl_file, sheetName = "Monthly Production Data")
+prod_hist
+```
+
+```{r}
+hist_cum_oil <- 
+prod_hist %>% 
+    mutate(Oil = as.character(Oil)) %>% 
+    mutate(Oil = as.double(Oil)) %>% 
+    mutate(Year = as.integer(as.character(Year))) %>%
+    mutate(Month = as.integer(as.character(Month))) %>%
+    rename(year = Year, month = Month, oil = Oil) %>% 
+    na.omit() %>% 
+    group_by(year, month) %>% 
+    summarise(vol_oil = sum(oil)) %>% 
+    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>% 
+    arrange(date) %>% 
+    ungroup() %>% 
+    select(date, vol_oil) %>% 
+    mutate(cum_oil = cumsum(vol_oil)) %>% 
+    
+    print()
+```
+
+```{r}
+df <- data.frame(date= seq.Date(as.Date("2008-01-01"), as.Date("2016-10-01"), 
+                                by = "month"),
+                 cum_oil = 0)
+df
+```
+
+```{r}
+# historical production
+# merge incomplete dataframe and complete with dates
+hist_cum_oil <- 
+left_join(df, hist_cum_oil, by = "date") %>% 
+    tidyr::replace_na(list(cum_oil.y = 0)) %>%
+    mutate(cum_oil = cum_oil.x + cum_oil.y) %>% 
+    select(date, cum_oil) %>% 
+    print
+```
+
+
+```{r}
+# cumulative oil from historical production
+ggplot(hist_cum_oil, aes(x = date, y = cum_oil)) +
+    geom_line() +
+    geom_col(color = "dark green", fill = "dark green", alpha = 0.35) +
+    ggtitle("Cumulative Oil, sm3", subtitle = "Historical Production")
+```
+
+```{r}
+ggplot(hist_cum_oil, aes(x = date, y = cum_oil)) +
+    geom_line(color = "dark green") +
+    geom_line(data = step_totals, aes(x = date, y = oil_otw))
+```
+
+```{r}
+# historical production
+hist_cum_oil <- 
+hist_cum_oil %>% 
+    mutate(source = "historical") %>% 
+    select(date, cum_oil, source) %>% 
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>% 
+    print()
+```
+
+```{r rows.print=50}
+# step field totals
+sim_cum_oil <- 
+step_totals %>% 
+    select(date, oil_otw) %>% 
+    mutate(oil_this_period = oil_otw - lag(oil_otw, default = 0)) %>% 
+    mutate(year = year(date), month = month(date)) %>%
+    group_by(year, month) %>%
+    summarize(vol_oil = sum(oil_this_period)) %>%
+    ungroup() %>%
+    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>%
+    mutate(source = "simulator") %>%
+    mutate(cum_oil = cumsum(vol_oil)) %>%
+    select(date, cum_oil, source) %>%
+    print()
+```
+
+```{r}
+# simulator production
+# merge incomplete dataframe and complete with dates
+sim_cum_oil <-
+left_join(df, sim_cum_oil, by = "date") %>% 
+    tidyr::replace_na(list(cum_oil.y = 0)) %>%
+    mutate(cum_oil = cum_oil.x + cum_oil.y) %>%
+    select(date, cum_oil) %>%
+    mutate(source = "simulator") %>% 
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default = 0), cum_oil)) %>% 
+    print
+```
+
+
+```{r}
+hist_cum_oil_break <- 
+hist_cum_oil %>% 
+    mutate(cum_oil_hist = cum_oil) %>% 
+    select(date, cum_oil_hist) %>% 
+    print()
+# cum_oil_bind <- cbind(hist_cum_oil, sim_cum_oil)
+# cum_oil_bind
+
+sim_cum_oil_break <- 
+sim_cum_oil %>% 
+    mutate(cum_oil_sim = cum_oil) %>% 
+    select(date, cum_oil_sim) %>% 
+    print()
+
+cum_oil_bind <- full_join(hist_cum_oil_break, sim_cum_oil_break, by = "date")
+cum_oil_bind
+```
+
+## How close cumulative productions are
+
+```{r}
+# Volve reservoir model dataset
+# plot historical vs simulator cum_oil
+cols <- c("simulator"="red", "historical"="dark green")
+ggplot(cum_oil_bind) +
+    geom_ribbon(aes(x = date, ymin= cum_oil_sim, ymax= cum_oil_hist), 
+                fill = "orange", alpha = 0.35) +
+    geom_line(aes(x = date, y = cum_oil_sim, color = "simulator")) +
+    geom_line(aes(x = date, y = cum_oil_hist, color = "historical")) +
+    labs(title = "Volve reservoir model. Comparison Cumulative Oil", 
+         subtitle = "Historical vs Simulator", 
+         y = "cumulative oil, sm3") +
+    scale_color_manual(name = "Curve", values = cols)
+```
