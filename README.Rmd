@@ -61,17 +61,21 @@ knitr::include_graphics("img/step_3197.png")
 
 Now, knowing the row indices for the text we need from the `PRT` file, we can proceed to extracting those lines of text and putting them in a list, one page, or one step, per list element. We do this to later iterate through all the steps and extract the data we want.
 
-
 ```{r}
 # get the text from all pages and put them in a list
 steps_info_txt_pages <- lapply(seq_along(step_info_range), function(x) 
     volve_2016_txt[step_info_range[[x]]])
 ```
 
+This is an example of the first page for step #1.
+```{r}
+steps_info_txt_pages[1]
+```
+
 
 ## Extracting step data from the text file
  
-### Extract the days
+### Extract the days from the STEP block
 Although we could extract all the data we require from the text file in one go, it is better to see one or two examples of seeing __regular expressions__ or __regex__ at work. Regular expressions are practically available to all programming languages: C++, Java, JavaScript, Python, Perl, etc.
 
 In this first example, we will extract the number of days at the current simulation step. If this is the first step page:
@@ -104,10 +108,16 @@ days_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
 })
 
 days_df <- do.call("rbind", days_dfs)
+```
+
+A sample of the first ten and last ten rows for the dataframe just extracted:
+
+```{r}
 rbind(head(days_df, 10), tail(days_df, 10))   # show the first 10 and last 10 rows
 ```
 
-### Extract the date 
+
+### Extract the simulator running date 
 
 This regular expresion pattern extracts the date from the current text line.
 
@@ -139,8 +149,8 @@ dim(date_df)
 rbind(head(date_df, 10), tail(date_df, 10))   # show the first 10 and last 10 rows
 ``` 
 
-## Extract values from the __STEP__ block
-After show this pair of example we continue with the extraction of the rest of the values. These are variables to be extracted:
+## Extract all the values from the __STEP__ block
+After show this pair of examples, we continue with the extraction of the rest of the values. If you take a look at the PRT file you will recognize these are variables to be extracted:
 
 * `STEP`  simulation step number
 * `TIME`  number of days elpased at the simulation step
@@ -151,9 +161,12 @@ After show this pair of example we continue with the extraction of the rest of t
 * `WGR`  water gas ratio
 
 
-The mission here is to extract all the variables that are made available by the simulator in the STEP block. As shown above, they are seven variables. 
+The mission here is to extract all the variables that are made available by the simulator in the __STEP__ block. As shown above, they are seven variables. 
+
+The following is an R script that extract all the variables from all the occurrences of the STEP block in the PRT file. The steps are not normally sequential, they may skip a day, or be generated after "few hours" in the simulation, and they do not necessarily match the date in the `field totals` dataframe.
 
 ```{r rows.print=50}
+# script that extracts production variables from the simulator output
 library(lubridate)
 
 # get the row indices where we find the keyword " STEP"
@@ -208,10 +221,19 @@ glimpse(step_info)
 ``` 
 
 ```{r}
-# first ten rows
-as_tibble(step_info)
+# show as a tibble
+(step_info <- as_tibble(step_info))
 ```
 
+The name of the variables in the dataframe:
+
+```{r}
+names(step_info)
+```
+
+You can see that the step do not carry any data regarding cumulative production.
+
+### Sample of the step dataframe
 Let's test the first day and last day of the simulation:
 
 ```{r}
@@ -219,228 +241,293 @@ tail(step_info$date,1) - head(step_info$date,1)
 ```
 
 ### Plot pressure vs time
+Now, we take a look at the pressure over the life of the field, from the simulator perspective.
 
 ```{r}
 ggplot(step_info, aes(x =date, y = pav_bar)) +
-    geom_line()
+    geom_line(color = "red") +
+    labs(title = "Pressure over time", subtitle = "Simulator output",
+         y = "Average Pressure (PAV), bar")
 ```
 
 
-## Merge cumulative oil wth simulator steps
+## Merge cumulative oil with simulator steps
+Next step is combining the data from the steps dataframe with the production cumulatives. This is not an straight operation since both dataframe have different date references.
 
-```{r}
+1. First, we will extract the production cumulatives from the PRT file. This is something we already did in the previous article. We will load that script.
 
-```
-
+### Field cumulatives
 
 ```{r rows.print=25}
-library(dplyr)
-library(lubridate)
+r_folder <- file.path(proj_root, "R")
+r_script <- file.path(r_folder, "extract_data_from_prt.R")
+source(r_script)
 
-# find the rows where we find the word "BALANCE  AT"
-balance_rows <- grep("^.*BALANCE  AT", volve_2016_txt)
-
-# add rows ahead to where the word BALANCE AT was found
-field_totals_range <- lapply(seq_along(balance_rows), function(x) 
-    c(balance_rows[x], balance_rows[x]+1:21))
-
-# try different strategy
-# iterating through the report pages in FIELD TOTALS
-# get:
-#    days, oil currently in place, oil originally in place, 
-#    oil outflow through wells
-
-# get the text from all pages and put them in a list
-field_totals_report_txt <- lapply(seq_along(field_totals_range), function(x) 
-    volve_2016_txt[field_totals_range[[x]]])
-
-# iterate through the list of pages
-field_totals_dfs <- lapply(seq_along(field_totals_report_txt), function(x) {
-    page <- field_totals_report_txt[[x]]  # put all pages text in a list
-    days_row_txt <- page[1] # get 1st row of page
-    days_value <- sub(".*?(\\d+.\\d.)+.*", "\\1", days_row_txt) # extract the days
-    
-    # get the date
-    date_row_txt <- grep("^.*REPORT", page)
-    date_value <- sub(".*?(\\d{1,2} [A-Z]{3} \\d{4})+.*", "\\1", page[date_row_txt])
-    date_value <- sub("JLY", "JUL", date_value)  # change JLY by JUL
-    
-    # get oil currently in place
-    ocip_row_txt <- grep("^.*:CURRENTLY IN PLACE", page)
-    ocip_value <- sub(".*?(\\d+.)+.*", "\\1", page[ocip_row_txt])
-    
-    # get OOIP
-    ooip_row_txt <- grep("^.*:ORIGINALLY IN PLACE", page)
-    ooip_value <- sub(".*?(\\d+.)+.*", "\\1", page[ooip_row_txt])
-    
-    # get total fluid outflow through wells
-    otw_row_txt <- grep("^.*:OUTFLOW THROUGH WELLS", page) # row index at this line
-    otw_group_pattern <- ".*?(\\d+.)+.*?(\\d+.)+.*?(\\d+.)+.*"  # groups
-    oil_otw_value <- sub(otw_group_pattern, "\\1", page[otw_row_txt]) # get oil outflow
-    wat_otw_value <- sub(otw_group_pattern, "\\2", page[otw_row_txt]) # get gas outflow
-    gas_otw_value <- sub(otw_group_pattern, "\\3", page[otw_row_txt]) # get water
-    
-    # get pressure
-    pav_row_txt <- grep("PAV =", page)
-    pav_value <- sub(".*?(\\d+.\\d.)+.*", "\\1", page[pav_row_txt])
-    
-    # dataframe
-    data.frame(
-               date = dmy(date_value), 
-               days = as.integer(days_value), 
-               ocip = as.double(ocip_value), 
-               ooip = as.double(ooip_value), 
-               oil_otw = as.double(oil_otw_value),
-               wat_otw = as.double(wat_otw_value),
-               gas_otw = as.double(gas_otw_value), 
-               pav = as.double(pav_value),
-               stringsAsFactors = FALSE
-               ) 
-})
-
-(field_totals <- do.call("rbind", field_totals_dfs))
+field_totals <- extract_field_totals(prt_file_content = volve_2016_txt)
+field_totals
 ```
 
 Now, we know that the STEP dataframe has more rows than the BALANCE-AT dataframe. What we want is to correlate the step with the oil cumulatives.
 
+```{r}
+dim(step_info)
+```
+
+```{r}
+dim(field_totals)
+```
+
+We merge both tables, steps and field cumulatives.
+
 ```{r rows.print=50}
+# join both tables by the common variable "date"
 step_totals <- 
 left_join(step_info, field_totals, by = "date") %>% 
     na.omit() %>% 
     select(date, time_days, days, everything()) %>% 
+    as_tibble() %>% 
     print
 ```
 
+### Plot outflow through wells from simulator
+
 ```{r}
 ggplot(step_totals, aes(x = date, y = oil_otw)) +
-    geom_line() +
+    geom_line(color = "dark green", size = 1.1) +
+    # geom_line(aes(x= date, y = ocip))
+    # geom_col(aes(x= date, y = ocip)) + 
     ggtitle("Cumulative Oil, sm3", subtitle = "Simulator")
 ```
 
-## Difference with historical production
 
 ```{r}
+ggplot(step_totals, aes(x = date, y = gas_otw)) +
+    geom_line(color = "orange", size = 1.1) +
+    labs(title = "Cumulative Gas", subtitle = "Simulator",
+         y = "Cumulative Gas, sm3")
+```
+
+```{r}
+ggplot(step_totals, aes(x = date, y = wat_otw)) +
+    geom_line(color = "blue", size = 1.1) +
+    labs(title = "Cumulative Water", subtitle = "Simulator",
+         y = "Cumulative Water, sm3")
+```
+
+### Calculate cumulatives for oil, gas and water
+
+```{r rows.print=50}
+# step field totals
+sim_cumulatives <- 
+step_totals %>% 
+    select(date, oil_otw, gas_otw, wat_otw) %>% 
+    mutate(oil_this_period = oil_otw - lag(oil_otw, default = 0)) %>%
+    mutate(gas_this_period = gas_otw - lag(gas_otw, default = 0)) %>%
+    mutate(wat_this_period = wat_otw - lag(wat_otw, default = 0)) %>% 
+    mutate(year = year(date), month = month(date)) %>%
+    group_by(year, month) %>%
+    summarize(vol_oil = sum(oil_this_period), 
+              vol_gas = sum(gas_this_period), 
+              vol_wat = sum(wat_this_period)) %>%
+    ungroup() %>%
+    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>%
+    # mutate(source = "simulator") %>%
+    mutate(cum_oil = cumsum(vol_oil), 
+           cum_gas = cumsum(vol_gas), 
+           cum_wat = cumsum(vol_wat)) %>%
+    select(date, year, month, everything()) %>%
+    print()
+```
+
+```{r}
+# create a dataframe with complete dates from 2008 until Oct-2016
+# this will fill any holes in the dates of any of the two dataframes
+dates_complete <- as_tibble(data.frame(date= seq.Date(as.Date("2008-01-01"), 
+                                          as.Date("2016-10-01"), by = "month"),
+                 cum_oil = 0, cum_gas = 0, cum_wat = 0))
+dates_complete
+```
+
+There are `r nrow(dates_complete)` months start to end of production.
+
+```{r}
+# simulator production
+# merge incomplete dataframe and fill with complete dates
+# there will be blank rows or NAs where previously was not data
+sim_cumulatives_dt <-
+left_join(dates_complete, sim_cumulatives, by = "date") %>% 
+    # remove NAs from the cumulatives .y
+    tidyr::replace_na(list(cum_oil.y = 0, vol_oil = 0,
+                           cum_gas.y = 0, vol_gas = 0,
+                           cum_wat.y = 0, vol_wat = 0)) %>%        # replace NAs with zeros
+    # add up cumulatives .x and .y
+    mutate(cum_oil = cum_oil.x + cum_oil.y, 
+           cum_gas = cum_gas.x + cum_gas.y,
+           cum_wat = cum_wat.x + cum_wat.y) %>%       # sum cumulatives
+    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat) %>%
+    # replace 0s with previous cumulative. these were rows that didn't exist
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default = 0), cum_oil)) %>%
+    mutate(cum_gas = ifelse(cum_gas == 0, lag(cum_gas, default = 0), cum_gas)) %>%
+    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default = 0), cum_wat)) %>%
+    mutate(vol_oil = ifelse(vol_oil == 0, lag(vol_oil, default = 0), vol_oil)) %>%
+    mutate(vol_gas = ifelse(vol_gas == 0, lag(vol_gas, default = 0), vol_gas)) %>%
+    mutate(vol_oil = ifelse(vol_wat == 0, lag(vol_wat, default = 0), vol_wat)) %>%
+    as_tibble() %>% 
+    print
+```
+
+The negative volume of water and oil are corrections.
+
+## Comparative with historical production
+
+```{r}
+# load historical production from Excel file
 library(xlsx)   # library to read Excel files in R
 
 # read the Excel file
 proj_root <- rprojroot::find_rstudio_root_file()   # get the project root folder
 xl_file <- file.path(proj_root, "inst/rawdata", "Volve production data.xlsx")
 # read only the monthly production
-prod_hist <- read.xlsx(xl_file, sheetName = "Monthly Production Data")
+prod_hist <- as_tibble(read.xlsx(xl_file, sheetName = "Monthly Production Data"))
 prod_hist
 ```
 
+### Cumulatives from production history
+
 ```{r}
-hist_cum_oil <- 
+hist_cumulatives <- 
 prod_hist %>% 
-    mutate(Oil = as.character(Oil)) %>% 
-    mutate(Oil = as.double(Oil)) %>% 
+    mutate(Oil = as.double(as.character(Oil))) %>%
+    mutate(Gas = as.double(as.character(Gas))) %>%
+    mutate(Water = as.double(as.character(Water))) %>% 
     mutate(Year = as.integer(as.character(Year))) %>%
     mutate(Month = as.integer(as.character(Month))) %>%
-    rename(year = Year, month = Month, oil = Oil) %>% 
+    rename(year = Year, month = Month, oil = Oil, gas = Gas, wat = Water) %>% 
     na.omit() %>% 
-    group_by(year, month) %>% 
-    summarise(vol_oil = sum(oil)) %>% 
-    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>% 
-    arrange(date) %>% 
-    ungroup() %>% 
-    select(date, vol_oil) %>% 
-    mutate(cum_oil = cumsum(vol_oil)) %>% 
-    
+    group_by(year, month) %>%
+    summarise(vol_oil = sum(oil), vol_gas = sum(gas), vol_wat = sum(wat)) %>%
+    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>%
+    arrange(date) %>%
+    ungroup() %>%
+    select(date, vol_oil, vol_gas, vol_wat) %>% 
+    mutate(cum_oil = cumsum(vol_oil), cum_gas = cumsum(vol_gas), 
+           cum_wat = cumsum(vol_wat)) %>% 
     print()
 ```
 
 ```{r}
-df <- data.frame(date= seq.Date(as.Date("2008-01-01"), as.Date("2016-10-01"), 
-                                by = "month"),
-                 cum_oil = 0)
+# create a dataframe with complete dates from 2008 until Oct-2016
+df <- as_tibble(data.frame(date= seq.Date(as.Date("2008-01-01"), 
+                                          as.Date("2016-10-01"), by = "month"),
+                 cum_oil = 0, cum_gas = 0, cum_wat = 0))
 df
 ```
 
 ```{r}
 # historical production
 # merge incomplete dataframe and complete with dates
-hist_cum_oil <- 
-left_join(df, hist_cum_oil, by = "date") %>% 
-    tidyr::replace_na(list(cum_oil.y = 0)) %>%
-    mutate(cum_oil = cum_oil.x + cum_oil.y) %>% 
-    select(date, cum_oil) %>% 
+hist_cumulatives_dt <- 
+left_join(df, hist_cumulatives, by = "date") %>% 
+    # replace NAs with zeros
+    tidyr::replace_na(list(cum_oil.y = 0, cum_gas.y = 0, cum_wat.y = 0)) %>%
+    tidyr::replace_na(list(vol_oil = 0, vol_gas = 0, vol_wat = 0)) %>%
+    # add up the extra column .y
+    mutate(cum_oil = cum_oil.x + cum_oil.y) %>%
+    mutate(cum_gas = cum_gas.x + cum_gas.y) %>%
+    mutate(cum_wat = cum_wat.x + cum_wat.y) %>%
+    # filter(date != as.Date("2016-10-01")) %>% 
+    # this fixes the zeros generated by adding complete dates
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>%
+    mutate(cum_gas = ifelse(cum_gas == 0, lag(cum_gas, default=0), cum_gas)) %>%
+    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default=0), cum_wat)) %>% 
+    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat) %>%
+    as_tibble() %>% 
     print
 ```
 
+```{r}
+# # historical production
+# hist_cum_oil <- 
+# hist_cum_oil %>% 
+#     mutate(source = "historical") %>% 
+#     select(date, cum_oil, source) %>% 
+#     mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>% 
+#     as_tibble() %>% 
+#     print()
+```
+
+
+### Plot historical cumulatives of oil, gas and water
 
 ```{r}
 # cumulative oil from historical production
-ggplot(hist_cum_oil, aes(x = date, y = cum_oil)) +
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
     geom_line() +
     geom_col(color = "dark green", fill = "dark green", alpha = 0.35) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Historical Production")
 ```
 
 ```{r}
-ggplot(hist_cum_oil, aes(x = date, y = cum_oil)) +
-    geom_line(color = "dark green") +
-    geom_line(data = step_totals, aes(x = date, y = oil_otw))
+# cumulative gas from historical production
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
+    geom_line() +
+    geom_col(color = "orange", fill = "orange", alpha = 0.35) +
+    ggtitle("Cumulative Gas, sm3", subtitle = "Historical Production")
 ```
 
 ```{r}
-# historical production
-hist_cum_oil <- 
-hist_cum_oil %>% 
-    mutate(source = "historical") %>% 
-    select(date, cum_oil, source) %>% 
-    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>% 
-    print()
+# cumulative water from historical production
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_wat)) +
+    geom_line() +
+    geom_col(color = "blue", fill = "blue", alpha = 0.35) +
+    ggtitle("Cumulative Water, sm3", subtitle = "Historical Production")
 ```
 
-```{r rows.print=50}
-# step field totals
-sim_cum_oil <- 
-step_totals %>% 
-    select(date, oil_otw) %>% 
-    mutate(oil_this_period = oil_otw - lag(oil_otw, default = 0)) %>% 
-    mutate(year = year(date), month = month(date)) %>%
-    group_by(year, month) %>%
-    summarize(vol_oil = sum(oil_this_period)) %>%
-    ungroup() %>%
-    mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>%
-    mutate(source = "simulator") %>%
-    mutate(cum_oil = cumsum(vol_oil)) %>%
-    select(date, cum_oil, source) %>%
+### Rename the variables according to source
+
+```{r}
+# rename the simulation cumulatives
+sim_cumulatives_src <- 
+sim_cumulatives_dt %>% 
+    select(date, cum_oil, cum_gas, cum_wat) %>% 
+    rename(cum_oil_sim = cum_oil, cum_gas_sim = cum_gas, cum_wat_sim = cum_wat) %>% 
     print()
 ```
 
 ```{r}
-# simulator production
-# merge incomplete dataframe and complete with dates
-sim_cum_oil <-
-left_join(df, sim_cum_oil, by = "date") %>% 
-    tidyr::replace_na(list(cum_oil.y = 0)) %>%
-    mutate(cum_oil = cum_oil.x + cum_oil.y) %>%
-    select(date, cum_oil) %>%
-    mutate(source = "simulator") %>% 
-    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default = 0), cum_oil)) %>% 
-    print
+# rename historical cumulatives according to source
+hist_cumulatives_src <- 
+hist_cumulatives_dt %>% 
+    select(date, cum_oil, cum_gas, cum_wat) %>% 
+    rename(cum_oil_hist = cum_oil, cum_gas_hist = cum_gas, cum_wat_hist = cum_wat) %>% 
+    print()
+```
+
+
+
+```{r}
+# # break the variable cum_oil by its source: historical or simulator
+# hist_cum_oil_break <- 
+# hist_cum_oil %>% 
+#     mutate(cum_oil_hist = cum_oil) %>% 
+#     # select(date, cum_oil_hist) %>% 
+#     print()
+```
+
+```{r}
+# # rename variables for simulator cumulatives
+# sim_cum_oil_break <- 
+# sim_cum_oil %>% 
+#     mutate(cum_oil_sim = cum_oil, cum_gas_sim = cum_gas, cum_wat_sim = cum_wat) %>% 
+#     select(date, cum_oil_sim, cum_gas_sim, cum_wat_sim) %>%
+#     print()
 ```
 
 
 ```{r}
-hist_cum_oil_break <- 
-hist_cum_oil %>% 
-    mutate(cum_oil_hist = cum_oil) %>% 
-    select(date, cum_oil_hist) %>% 
-    print()
-# cum_oil_bind <- cbind(hist_cum_oil, sim_cum_oil)
-# cum_oil_bind
-
-sim_cum_oil_break <- 
-sim_cum_oil %>% 
-    mutate(cum_oil_sim = cum_oil) %>% 
-    select(date, cum_oil_sim) %>% 
-    print()
-
-cum_oil_bind <- full_join(hist_cum_oil_break, sim_cum_oil_break, by = "date")
-cum_oil_bind
+# combine simulator and historical dataframes. common variable is "date"
+cumulatives_all <- full_join(hist_cumulatives_src, sim_cumulatives_src, by = "date")
+cumulatives_all
 ```
 
 ## How close cumulative productions are
@@ -448,14 +535,47 @@ cum_oil_bind
 ```{r}
 # Volve reservoir model dataset
 # plot historical vs simulator cum_oil
-cols <- c("simulator"="red", "historical"="dark green")
-ggplot(cum_oil_bind) +
+cols <- c("simulator"="red", "historical"="blue") # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
     geom_ribbon(aes(x = date, ymin= cum_oil_sim, ymax= cum_oil_hist), 
-                fill = "orange", alpha = 0.35) +
+                fill = "dark green", alpha = 0.35) + 
     geom_line(aes(x = date, y = cum_oil_sim, color = "simulator")) +
     geom_line(aes(x = date, y = cum_oil_hist, color = "historical")) +
     labs(title = "Volve reservoir model. Comparison Cumulative Oil", 
          subtitle = "Historical vs Simulator", 
          y = "cumulative oil, sm3") +
-    scale_color_manual(name = "Curve", values = cols)
+    scale_color_manual(name = "Curve", values = cols)  # manual legend
+```
+
+```{r}
+# Volve reservoir model dataset
+# plot historical vs simulator cum_gas
+cols <- c("simulator"="red", "historical"="blue") # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
+    geom_ribbon(aes(x = date, ymin= cum_gas_sim, ymax= cum_gas_hist), 
+                fill = "orange", alpha = 0.35) + 
+    geom_line(aes(x = date, y = cum_gas_sim, color = "simulator"), size = 1) +
+    geom_line(aes(x = date, y = cum_gas_hist, color = "historical"), size = 1) +
+    labs(title = "Volve reservoir model. Comparison Cumulative Gas", 
+         subtitle = "Historical vs Simulator", 
+         y = "cumulative gas, sm3") +
+    scale_color_manual(name = "Curve", values = cols)  # manual legend
+```
+
+```{r}
+# Volve reservoir model dataset
+# plot historical vs simulator cumulative water variable
+cols <- c("simulator"="red", "historical"="blue") # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
+    geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist), 
+                fill = "cyan", alpha = 0.35) + 
+    geom_line(aes(x = date, y = cum_wat_sim, color = "simulator"), size = 1) +
+    geom_line(aes(x = date, y = cum_wat_hist, color = "historical"), size = 1) +
+    labs(title = "Volve reservoir model. Comparison Cumulative Water", 
+         subtitle = "Historical vs Simulator", 
+         y = "cumulative water, sm3") +
+    scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
