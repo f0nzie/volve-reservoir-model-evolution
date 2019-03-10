@@ -110,6 +110,7 @@ days_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
 days_df <- do.call("rbind", days_dfs)
 ```
 
+### Extract the days
 A sample of the first ten and last ten rows for the dataframe just extracted:
 
 ```{r}
@@ -192,6 +193,7 @@ step_info_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
     step_value <- sub(line_1_pattern, "\\1", page[row_txt], perl = TRUE) # extract step
     days_value <- sub(line_1_pattern, "\\2", page[row_txt], perl = TRUE) # extract days
     date_value <- sub(line_1_pattern, "\\4", page[row_txt], perl = TRUE) # extract date
+    date_value <- sub("JLY", "JUL", date_value)              # change JLY by JUL
     
     
     # this is line 2
@@ -205,7 +207,8 @@ step_info_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
     
     # dataframe; 
     data.frame(step = as.integer(step_value), 
-               date = dmy(date_value), 
+               date = dmy(date_value),
+               # date = date_value, 
                time_days = as.double(days_value), 
                pav_bar   = as.double(pav_value),
                wct_pct   = as.double(wct_value),
@@ -240,6 +243,17 @@ Let's test the first day and last day of the simulation:
 tail(step_info$date,1) - head(step_info$date,1)
 ```
 
+### Save to data files
+
+```{r}
+data_folder <- file.path(proj_root, "data")
+
+save(step_info, file = file.path(data_folder, "data_from_step.Rdata"))
+write.csv(step_info, file = file.path(data_folder, 
+                                         "data_from_step.CSV"), 
+          row.names = FALSE)
+```
+
 ### Plot pressure vs time
 Now, we take a look at the pressure over the life of the field, from the simulator perspective.
 
@@ -250,6 +264,15 @@ ggplot(step_info, aes(x =date, y = pav_bar)) +
          y = "Average Pressure (PAV), bar")
 ```
 
+### Plot watercut vs time
+
+```{r}
+# plot from PRT simulator output (STEP block)
+ggplot(step_info, aes(x =date, y = wct_pct)) +
+    geom_line(color = "blue") +
+    labs(title = "Field watercut over time", subtitle = "Simulator output",
+         y = "Watercut, percent")
+```
 
 ## Merge cumulative oil with simulator steps
 Next step is combining the data from the steps dataframe with the production cumulatives. This is not an straight operation since both dataframe have different date references.
@@ -266,6 +289,30 @@ source(r_script)
 field_totals <- extract_field_totals(prt_file_content = volve_2016_txt)
 field_totals
 ```
+
+### Save to data files
+
+```{r}
+data_folder <- file.path(proj_root, "data")
+
+save(field_totals, file = file.path(data_folder, "field_totals_balance.Rdata"))
+write.csv(field_totals, file = file.path(data_folder, 
+                                         "field_totals_balance.CSV"), 
+          row.names = FALSE)
+```
+
+
+
+
+```{r}
+# plot from PRT simulator output (BALANCE AT block)
+ggplot(field_totals, aes(x =date, y = wat_otw)) +
+    geom_line(color = "blue") +
+    labs(title = "Field Water Outflow Through Wells", 
+         subtitle = "Simulator output, BALANCE block",
+         y = "Water volume, sm3")
+```
+
 
 Now, we know that the STEP dataframe has more rows than the BALANCE-AT dataframe. What we want is to correlate the step with the oil cumulatives.
 

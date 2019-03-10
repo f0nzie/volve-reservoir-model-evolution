@@ -111,6 +111,8 @@ days_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
 days_df <- do.call("rbind", days_dfs)
 ```
 
+### Extract the days
+
 A sample of the first ten and last ten rows for the dataframe just
 extracted:
 
@@ -245,6 +247,7 @@ step_info_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
     step_value <- sub(line_1_pattern, "\\1", page[row_txt], perl = TRUE) # extract step
     days_value <- sub(line_1_pattern, "\\2", page[row_txt], perl = TRUE) # extract days
     date_value <- sub(line_1_pattern, "\\4", page[row_txt], perl = TRUE) # extract date
+    date_value <- sub("JLY", "JUL", date_value)              # change JLY by JUL
     
     
     # this is line 2
@@ -258,7 +261,8 @@ step_info_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
     
     # dataframe; 
     data.frame(step = as.integer(step_value), 
-               date = dmy(date_value), 
+               date = dmy(date_value),
+               # date = date_value, 
                time_days = as.double(days_value), 
                pav_bar   = as.double(pav_value),
                wct_pct   = as.double(wct_value),
@@ -321,6 +325,17 @@ tail(step_info$date,1) - head(step_info$date,1)
 #> Time difference of 3196 days
 ```
 
+### Save to data files
+
+``` r
+data_folder <- file.path(proj_root, "data")
+
+save(step_info, file = file.path(data_folder, "data_from_step.Rdata"))
+write.csv(step_info, file = file.path(data_folder, 
+                                         "data_from_step.CSV"), 
+          row.names = FALSE)
+```
+
 ### Plot pressure vs time
 
 Now, we take a look at the pressure over the life of the field, from the
@@ -333,7 +348,19 @@ ggplot(step_info, aes(x =date, y = pav_bar)) +
          y = "Average Pressure (PAV), bar")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-13-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
+
+### Plot watercut vs time
+
+``` r
+# plot from PRT simulator output (STEP block)
+ggplot(step_info, aes(x =date, y = wct_pct)) +
+    geom_line(color = "blue") +
+    labs(title = "Field watercut over time", subtitle = "Simulator output",
+         y = "Watercut, percent")
+```
+
+<img src="README_files/figure-gfm/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
 
 ## Merge cumulative oil with simulator steps
 
@@ -370,6 +397,28 @@ field_totals
 #> # ... with 330 more rows
 ```
 
+### Save to data files
+
+``` r
+data_folder <- file.path(proj_root, "data")
+
+save(field_totals, file = file.path(data_folder, "field_totals_balance.Rdata"))
+write.csv(field_totals, file = file.path(data_folder, 
+                                         "field_totals_balance.CSV"), 
+          row.names = FALSE)
+```
+
+``` r
+# plot from PRT simulator output (BALANCE AT block)
+ggplot(field_totals, aes(x =date, y = wat_otw)) +
+    geom_line(color = "blue") +
+    labs(title = "Field Water Outflow Through Wells", 
+         subtitle = "Simulator output, BALANCE block",
+         y = "Water volume, sm3")
+```
+
+<img src="README_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
+
 Now, we know that the STEP dataframe has more rows than the BALANCE-AT
 dataframe. What we want is to correlate the step with the oil
 cumulatives.
@@ -394,7 +443,7 @@ left_join(step_info, field_totals, by = "date") %>%
     select(date, time_days, days, everything()) %>% 
     as_tibble() %>% 
     print
-#> # A tibble: 483 x 14
+#> # A tibble: 524 x 14
 #>    date       time_days  days  step pav_bar wct_pct gor_m3m3 wgr_m3m3
 #>    <date>         <dbl> <int> <int>   <dbl>   <dbl>    <dbl>    <dbl>
 #>  1 2008-01-11      11      11     7    330.       0       0         0
@@ -407,7 +456,7 @@ left_join(step_info, field_totals, by = "date") %>%
 #>  8 2008-03-11      71      71    21    314.       0     157.        0
 #>  9 2008-03-21      81      81    23    308.       0     156.        0
 #> 10 2008-03-21      81.5    81    24    308        0     156.        0
-#> # ... with 473 more rows, and 6 more variables: ocip <dbl>, ooip <dbl>,
+#> # ... with 514 more rows, and 6 more variables: ocip <dbl>, ooip <dbl>,
 #> #   oil_otw <dbl>, wat_otw <dbl>, gas_otw <dbl>, pav <dbl>
 ```
 
@@ -421,7 +470,7 @@ ggplot(step_totals, aes(x = date, y = oil_otw)) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Simulator")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
 
 ``` r
 ggplot(step_totals, aes(x = date, y = gas_otw)) +
@@ -430,7 +479,7 @@ ggplot(step_totals, aes(x = date, y = gas_otw)) +
          y = "Cumulative Gas, sm3")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
 
 ``` r
 ggplot(step_totals, aes(x = date, y = wat_otw)) +
@@ -439,7 +488,7 @@ ggplot(step_totals, aes(x = date, y = wat_otw)) +
          y = "Cumulative Water, sm3")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-24-1.png" style="display: block; margin: auto;" />
 
 ### Calculate cumulatives for oil, gas and water
 
@@ -464,7 +513,7 @@ step_totals %>%
            cum_wat = cumsum(vol_wat)) %>%
     select(date, year, month, everything()) %>%
     print()
-#> # A tibble: 97 x 9
+#> # A tibble: 106 x 9
 #>    date        year month vol_oil  vol_gas vol_wat cum_oil  cum_gas cum_wat
 #>    <date>     <dbl> <dbl>   <dbl>    <dbl>   <dbl>   <dbl>    <dbl>   <dbl>
 #>  1 2008-01-01  2008     1       0        0       0       0   0.           0
@@ -473,11 +522,11 @@ step_totals %>%
 #>  4 2008-04-01  2008     4   73833 11469357   22292  194702   3.05e7   22293
 #>  5 2008-05-01  2008     5  124196 19115952  212550  318898   4.96e7  234843
 #>  6 2008-06-01  2008     6  137247 20967327  192961  456145   7.06e7  427804
-#>  7 2008-08-01  2008     8  325721 50425540  440392  781866   1.21e8  868196
-#>  8 2008-09-01  2008     9  163015 25205884  137169  944881   1.46e8 1005365
-#>  9 2008-10-01  2008    10  221230 33570835  317736 1166111   1.80e8 1323101
-#> 10 2008-11-01  2008    11  247773 37703913  402563 1413884   2.17e8 1725664
-#> # ... with 87 more rows
+#>  7 2008-07-01  2008     7  155664 24005385  212739  611809   9.46e7  640543
+#>  8 2008-08-01  2008     8  170057 26420155  227653  781866   1.21e8  868196
+#>  9 2008-09-01  2008     9  163015 25205884  137169  944881   1.46e8 1005365
+#> 10 2008-10-01  2008    10  221230 33570835  317736 1166111   1.80e8 1323101
+#> # ... with 96 more rows
 ```
 
 ``` r
@@ -538,8 +587,8 @@ left_join(dates_complete, sim_cumulatives, by = "date") %>%
 #>  4 2008-04-01  194702  30471061   22293   22292 11469357   22292
 #>  5 2008-05-01  318898  49587013  234843  212550 19115952  212550
 #>  6 2008-06-01  456145  70554340  427804  192961 20967327  192961
-#>  7 2008-07-01  456145  70554340  427804  192961 20967327       0
-#>  8 2008-08-01  781866 120979880  868196  440392 50425540  440392
+#>  7 2008-07-01  611809  94559725  640543  212739 24005385  212739
+#>  8 2008-08-01  781866 120979880  868196  227653 26420155  227653
 #>  9 2008-09-01  944881 146185764 1005365  137169 25205884  137169
 #> 10 2008-10-01 1166111 179756599 1323101  317736 33570835  317736
 #> # ... with 96 more rows
@@ -691,7 +740,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-29-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-33-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # cumulative gas from historical production
@@ -701,7 +750,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
     ggtitle("Cumulative Gas, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-30-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-34-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # cumulative water from historical production
@@ -711,7 +760,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_wat)) +
     ggtitle("Cumulative Water, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-31-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-35-1.png" style="display: block; margin: auto;" />
 
 ### Rename the variables according to source
 
@@ -731,7 +780,7 @@ sim_cumulatives_dt %>%
 #>  4 2008-04-01      194702    30471061       22293
 #>  5 2008-05-01      318898    49587013      234843
 #>  6 2008-06-01      456145    70554340      427804
-#>  7 2008-07-01      456145    70554340      427804
+#>  7 2008-07-01      611809    94559725      640543
 #>  8 2008-08-01      781866   120979880      868196
 #>  9 2008-09-01      944881   146185764     1005365
 #> 10 2008-10-01     1166111   179756599     1323101
@@ -792,7 +841,7 @@ cumulatives_all
 #>  4 2008-04-01      206985.    30765621.         922.      194702
 #>  5 2008-05-01      332463.    49857492.       17202.      318898
 #>  6 2008-06-01      476250.    71369826.       17677.      456145
-#>  7 2008-07-01      642530.    96025129.       18093.      456145
+#>  7 2008-07-01      642530.    96025129.       18093.      611809
 #>  8 2008-08-01      807974.   119948670.       18669.      781866
 #>  9 2008-09-01     1000237.   147475129.       19134.      944881
 #> 10 2008-10-01     1237411.   181232829.       19859.     1166111
@@ -818,7 +867,7 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-37-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-41-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # Volve reservoir model dataset
@@ -836,7 +885,7 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-38-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # Volve reservoir model dataset
@@ -854,4 +903,4 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-39-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-43-1.png" style="display: block; margin: auto;" />
