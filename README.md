@@ -400,8 +400,8 @@ field_totals
 ### Save to data files
 
 ``` r
+# save the data
 data_folder <- file.path(proj_root, "data")
-
 save(field_totals, file = file.path(data_folder, "field_totals_balance.Rdata"))
 write.csv(field_totals, file = file.path(data_folder, 
                                          "field_totals_balance.CSV"), 
@@ -432,6 +432,8 @@ dim(step_info)
 dim(field_totals)
 #> [1] 340   8
 ```
+
+## Join field totals and step dataframes
 
 We merge both tables, steps and field cumulatives.
 
@@ -624,6 +626,17 @@ prod_hist
 #> # ... with 519 more rows, and 1 more variable: WI <fct>
 ```
 
+### Save raw production history
+
+``` r
+# save historical data as raw
+data_folder <- file.path(proj_root, "data")
+save(prod_hist, file = file.path(data_folder, "production_history_raw.Rdata"))
+write.csv(prod_hist, file = file.path(data_folder, 
+                                         "production_history_raw.CSV"), 
+          row.names = FALSE)
+```
+
 ### Cumulatives from production history
 
 ``` r
@@ -634,31 +647,48 @@ prod_hist %>%
     mutate(Water = as.double(as.character(Water))) %>% 
     mutate(Year = as.integer(as.character(Year))) %>%
     mutate(Month = as.integer(as.character(Month))) %>%
+    mutate(GI = as.double(as.character(GI))) %>%
+    mutate(WI = as.double(as.character(WI))) %>%
+    tidyr::replace_na(list(GI = 0, WI = 0)) %>%
+    select(-c(NPDCode, On.Stream)) %>% 
     rename(year = Year, month = Month, oil = Oil, gas = Gas, wat = Water) %>% 
-    na.omit() %>% 
+    na.omit() %>%                 # remove all rows that have at least one NA
     group_by(year, month) %>%
-    summarise(vol_oil = sum(oil), vol_gas = sum(gas), vol_wat = sum(wat)) %>%
+    summarise(vol_oil = sum(oil), vol_gas = sum(gas), vol_wat = sum(wat),
+              vol_gi = sum(GI), vol_wi = sum(WI)) %>%
     mutate(date = ymd(paste(year, month, "01", sep = "-"))) %>%
     arrange(date) %>%
     ungroup() %>%
-    select(date, vol_oil, vol_gas, vol_wat) %>% 
-    mutate(cum_oil = cumsum(vol_oil), cum_gas = cumsum(vol_gas), 
-           cum_wat = cumsum(vol_wat)) %>% 
+    select(date, vol_oil, vol_gas, vol_wat, vol_gi, vol_wi) %>%
+    mutate(cum_oil = cumsum(vol_oil), cum_gas = cumsum(vol_gas),
+           cum_wat = cumsum(vol_wat), 
+           cum_gi = cumsum(vol_gi), cum_wi = cumsum(vol_wi)) %>%
     print()
-#> # A tibble: 104 x 7
-#>    date       vol_oil   vol_gas vol_wat  cum_oil    cum_gas cum_wat
-#>    <date>       <dbl>     <dbl>   <dbl>    <dbl>      <dbl>   <dbl>
-#>  1 2008-02-01  49091.  7068009.   413.    49091.   7068009.    413.
-#>  2 2008-03-01  83361. 12191171.    27.4  132452.  19259180.    440.
-#>  3 2008-04-01  74532. 11506441.   482.   206985.  30765621.    922.
-#>  4 2008-05-01 125479. 19091872. 16280.   332463.  49857492.  17202.
-#>  5 2008-06-01 143787. 21512334.   474.   476250.  71369826.  17677.
-#>  6 2008-07-01 166280. 24655303.   416.   642530.  96025129.  18093.
-#>  7 2008-08-01 165444. 23923541.   577.   807974. 119948670.  18669.
-#>  8 2008-09-01 192263. 27526459.   464.  1000237. 147475129.  19134.
-#>  9 2008-10-01 237174. 33757700.   725.  1237411. 181232829.  19859.
-#> 10 2008-11-01 250325. 35743142.  2580.  1487736. 216975972.  22439.
-#> # ... with 94 more rows
+#> # A tibble: 104 x 11
+#>    date       vol_oil vol_gas vol_wat vol_gi vol_wi cum_oil cum_gas cum_wat
+#>    <date>       <dbl>   <dbl>   <dbl>  <dbl>  <dbl>   <dbl>   <dbl>   <dbl>
+#>  1 2008-02-01  49091.  7.07e6   413.       0      0  4.91e4  7.07e6    413.
+#>  2 2008-03-01  83361.  1.22e7    27.4      0      0  1.32e5  1.93e7    440.
+#>  3 2008-04-01  74532.  1.15e7   482.       0      0  2.07e5  3.08e7    922.
+#>  4 2008-05-01 125479.  1.91e7 16280.       0      0  3.32e5  4.99e7  17202.
+#>  5 2008-06-01 143787.  2.15e7   474.       0      0  4.76e5  7.14e7  17677.
+#>  6 2008-07-01 166280.  2.47e7   416.       0      0  6.43e5  9.60e7  18093.
+#>  7 2008-08-01 165444.  2.39e7   577.       0      0  8.08e5  1.20e8  18669.
+#>  8 2008-09-01 192263.  2.75e7   464.       0      0  1.00e6  1.47e8  19134.
+#>  9 2008-10-01 237174.  3.38e7   725.       0      0  1.24e6  1.81e8  19859.
+#> 10 2008-11-01 250325.  3.57e7  2580.       0      0  1.49e6  2.17e8  22439.
+#> # ... with 94 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
+```
+
+### Save historical cumulatives as-is
+
+``` r
+# save historical data
+data_folder <- file.path(proj_root, "data")
+save(hist_cumulatives, file = file.path(data_folder, "hist_cumulatives_104.Rdata"))
+write.csv(hist_cumulatives, file = file.path(data_folder, 
+                                         "hist_cumulatives_104.CSV"), 
+          row.names = FALSE)
 ```
 
 ``` r
@@ -691,6 +721,7 @@ left_join(df, hist_cumulatives, by = "date") %>%
     # replace NAs with zeros
     tidyr::replace_na(list(cum_oil.y = 0, cum_gas.y = 0, cum_wat.y = 0)) %>%
     tidyr::replace_na(list(vol_oil = 0, vol_gas = 0, vol_wat = 0)) %>%
+    tidyr::replace_na(list(vol_gi = 0, vol_wi = 0, cum_gi = 0, cum_wi = 0)) %>%
     # add up the extra column .y
     mutate(cum_oil = cum_oil.x + cum_oil.y) %>%
     mutate(cum_gas = cum_gas.x + cum_gas.y) %>%
@@ -699,35 +730,38 @@ left_join(df, hist_cumulatives, by = "date") %>%
     # this fixes the zeros generated by adding complete dates
     mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>%
     mutate(cum_gas = ifelse(cum_gas == 0, lag(cum_gas, default=0), cum_gas)) %>%
-    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default=0), cum_wat)) %>% 
-    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat) %>%
+    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default=0), cum_wat)) %>%
+    mutate(cum_gi = ifelse(cum_gi == 0, lag(cum_gi, default=0), cum_gi)) %>% 
+    mutate(cum_wi = ifelse(cum_wi == 0, lag(cum_wi, default=0), cum_wi)) %>% 
+    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat, 
+           vol_gi, vol_wi, cum_gi, cum_wi) %>%
     as_tibble() %>% 
     print
-#> # A tibble: 106 x 7
-#>    date        cum_oil    cum_gas cum_wat vol_oil   vol_gas vol_wat
-#>    <date>        <dbl>      <dbl>   <dbl>   <dbl>     <dbl>   <dbl>
-#>  1 2008-01-01       0          0       0       0         0      0  
-#>  2 2008-02-01   49091.   7068009.    413.  49091.  7068009.   413. 
-#>  3 2008-03-01  132452.  19259180.    440.  83361. 12191171.    27.4
-#>  4 2008-04-01  206985.  30765621.    922.  74532. 11506441.   482. 
-#>  5 2008-05-01  332463.  49857492.  17202. 125479. 19091872. 16280. 
-#>  6 2008-06-01  476250.  71369826.  17677. 143787. 21512334.   474. 
-#>  7 2008-07-01  642530.  96025129.  18093. 166280. 24655303.   416. 
-#>  8 2008-08-01  807974. 119948670.  18669. 165444. 23923541.   577. 
-#>  9 2008-09-01 1000237. 147475129.  19134. 192263. 27526459.   464. 
-#> 10 2008-10-01 1237411. 181232829.  19859. 237174. 33757700.   725. 
-#> # ... with 96 more rows
+#> # A tibble: 106 x 11
+#>    date       cum_oil cum_gas cum_wat vol_oil vol_gas vol_wat vol_gi vol_wi
+#>    <date>       <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>  <dbl>  <dbl>
+#>  1 2008-01-01  0.      0.          0       0   0.         0        0      0
+#>  2 2008-02-01  4.91e4  7.07e6    413.  49091.  7.07e6   413.       0      0
+#>  3 2008-03-01  1.32e5  1.93e7    440.  83361.  1.22e7    27.4      0      0
+#>  4 2008-04-01  2.07e5  3.08e7    922.  74532.  1.15e7   482.       0      0
+#>  5 2008-05-01  3.32e5  4.99e7  17202. 125479.  1.91e7 16280.       0      0
+#>  6 2008-06-01  4.76e5  7.14e7  17677. 143787.  2.15e7   474.       0      0
+#>  7 2008-07-01  6.43e5  9.60e7  18093. 166280.  2.47e7   416.       0      0
+#>  8 2008-08-01  8.08e5  1.20e8  18669. 165444.  2.39e7   577.       0      0
+#>  9 2008-09-01  1.00e6  1.47e8  19134. 192263.  2.75e7   464.       0      0
+#> 10 2008-10-01  1.24e6  1.81e8  19859. 237174.  3.38e7   725.       0      0
+#> # ... with 96 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
 ```
 
+### Save historical cumulatives with fixed dates
+
 ``` r
-# # historical production
-# hist_cum_oil <- 
-# hist_cum_oil %>% 
-#     mutate(source = "historical") %>% 
-#     select(date, cum_oil, source) %>% 
-#     mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %>% 
-#     as_tibble() %>% 
-#     print()
+# save historical data with complete dates. 106 rows
+data_folder <- file.path(proj_root, "data")
+save(hist_cumulatives_dt, file = file.path(data_folder, "hist_cumulatives_dt.Rdata"))
+write.csv(hist_cumulatives_dt, file = file.path(data_folder, 
+                                         "hist_cumulatives_dt.CSV"), 
+          row.names = FALSE)
 ```
 
 ### Plot historical cumulatives of oil, gas and water
@@ -740,7 +774,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-33-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-35-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # cumulative gas from historical production
@@ -750,7 +784,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
     ggtitle("Cumulative Gas, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-34-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-36-1.png" style="display: block; margin: auto;" />
 
 ``` r
 # cumulative water from historical production
@@ -760,7 +794,7 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_wat)) +
     ggtitle("Cumulative Water, sm3", subtitle = "Historical Production")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-35-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-37-1.png" style="display: block; margin: auto;" />
 
 ### Rename the variables according to source
 
@@ -808,24 +842,6 @@ hist_cumulatives_dt %>%
 #>  9 2008-09-01     1000237.   147475129.       19134.
 #> 10 2008-10-01     1237411.   181232829.       19859.
 #> # ... with 96 more rows
-```
-
-``` r
-# # break the variable cum_oil by its source: historical or simulator
-# hist_cum_oil_break <- 
-# hist_cum_oil %>% 
-#     mutate(cum_oil_hist = cum_oil) %>% 
-#     # select(date, cum_oil_hist) %>% 
-#     print()
-```
-
-``` r
-# # rename variables for simulator cumulatives
-# sim_cum_oil_break <- 
-# sim_cum_oil %>% 
-#     mutate(cum_oil_sim = cum_oil, cum_gas_sim = cum_gas, cum_wat_sim = cum_wat) %>% 
-#     select(date, cum_oil_sim, cum_gas_sim, cum_wat_sim) %>%
-#     print()
 ```
 
 ``` r
@@ -893,8 +909,8 @@ ggplot(cumulatives_all) +
 cols <- c("simulator"="red", "historical"="blue") # legend: colors and names
 ggplot(cumulatives_all) +
     # shade the area between the curves
-    geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist), 
-                fill = "cyan", alpha = 0.35) + 
+    # geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist), 
+    #             fill = "cyan", alpha = 0.35) + 
     geom_line(aes(x = date, y = cum_wat_sim, color = "simulator"), size = 1) +
     geom_line(aes(x = date, y = cum_wat_hist, color = "historical"), size = 1) +
     labs(title = "Volve reservoir model. Comparison Cumulative Water", 
