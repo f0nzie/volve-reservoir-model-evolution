@@ -3,6 +3,9 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+
+
+
 ## Extract the GOR value
 ### Explanation
 
@@ -24,6 +27,7 @@ gor_dfs <- lapply(seq_along(steps_info_txt_pages), function(x) {
 gor_df <- do.call("rbind", gor_dfs)
 gor_df
 ```  
+
 ## Water Gas Ratio (WGR)
 ###
 
