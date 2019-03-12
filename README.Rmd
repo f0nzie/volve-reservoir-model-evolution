@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 
-# volve-reservoir-model-evolution
+# A reproducible study of the Volve reservoir model 
 
 ```{r read-prt-file}
 library(dplyr)
@@ -150,7 +150,7 @@ dim(date_df)
 rbind(head(date_df, 10), tail(date_df, 10))   # show the first 10 and last 10 rows
 ``` 
 
-## Extract all the values from the __STEP__ block
+### Extract all the values from the __STEP__ block
 After show this pair of examples, we continue with the extraction of the rest of the values. If you take a look at the PRT file you will recognize these are variables to be extracted:
 
 * `STEP`  simulation step number
@@ -254,7 +254,10 @@ write.csv(step_info, file = file.path(data_folder,
           row.names = FALSE)
 ```
 
-### Plot pressure vs time
+
+### Plots from the step block
+
+#### Plot pressure vs time
 Now, we take a look at the pressure over the life of the field, from the simulator perspective.
 
 ```{r}
@@ -264,7 +267,7 @@ ggplot(step_info, aes(x =date, y = pav_bar)) +
          y = "Average Pressure (PAV), bar")
 ```
 
-### Plot watercut vs time
+#### Plot watercut vs time
 
 ```{r}
 # plot from PRT simulator output (STEP block)
@@ -274,12 +277,41 @@ ggplot(step_info, aes(x =date, y = wct_pct)) +
          y = "Watercut, percent")
 ```
 
+
+```{r}
+library(tidyr)
+
+step_info_gather <- 
+step_info %>% 
+  select(-c(step, time_days)) %>% 
+  gather(key = var, value, pav_bar:wgr_m3m3) %>% 
+  print()
+  
+```
+
+### Plot all variables from `STEP` block
+
+```{r}
+# plot production variables from the STEP block in the PRT file
+
+# change the name of the facet labels
+facet_labels <- c(`gor_m3m3` = "GOR, m3/m3", `pav_bar` = "Avg.Pres, bar",
+                  `wct_pct` = "Watercut, %", `wgr_m3m3` = "Water Gas Ratio, m3/m3")
+
+ggplot(step_info_gather, aes(x = date, y = value)) +
+  geom_line() +
+  facet_wrap(.~var, scales = "free_y", labeller = as_labeller(facet_labels)) +
+  labs(title = "Production variables from STEP block", 
+       subtitle = "Simulator output", y = "", x = "")
+```
+
+
 ## Merge cumulative oil with simulator steps
 Next step is combining the data from the steps dataframe with the production cumulatives. This is not an straight operation since both dataframe have different date references.
 
 1. First, we will extract the production cumulatives from the PRT file. This is something we already did in the previous article. We will load that script.
 
-### Field cumulatives
+## Extract Field cumulatives from the `BALANCE-AT` block
 
 ```{r rows.print=25}
 r_folder <- file.path(proj_root, "R")
@@ -290,7 +322,7 @@ field_totals <- extract_field_totals(prt_file_content = volve_2016_txt)
 field_totals
 ```
 
-### Save to data files
+#### Save field totals to data files
 
 ```{r}
 # save the data
@@ -426,7 +458,7 @@ left_join(dates_complete, sim_cumulatives, by = "date") %>%
 
 The negative volume of water and oil are corrections.
 
-## Comparative with historical production
+## Comparative of simulator vs historical production
 
 ```{r}
 # load historical production from Excel file
@@ -440,7 +472,7 @@ prod_hist <- as_tibble(read.xlsx(xl_file, sheetName = "Monthly Production Data")
 prod_hist
 ```
 
-### Save raw production history 
+### Save raw production history to data files 
 
 ```{r}
 # save historical data as raw
@@ -526,6 +558,38 @@ left_join(df, hist_cumulatives, by = "date") %>%
     print
 ```
 
+### Plot production rates
+gather(key = var, value, pav_bar:wgr_m3m3) %>% 
+```{r}
+hist_cumulatives_dt_gather <- 
+hist_cumulatives_dt %>% 
+  select(date, vol_oil, vol_gas, vol_wat) %>% 
+  gather(key = var, value, vol_oil:vol_wat) %>% 
+  
+  print()
+```
+
+
+```{r fig.height=8, fig.width=6}
+# plot production variables from the STEP block in the PRT file
+
+# order of the plots
+hist_cumulatives_dt_gather$var_f <- 
+  factor(hist_cumulatives_dt_gather$var, 
+         levels = c("vol_oil", "vol_gas", "vol_wat"))
+
+# change the name of the facet labels
+facet_labels <- c(`vol_oil` = "Oil", `vol_gas` = "Gas", `vol_wat` = "Water")
+
+ggplot(hist_cumulatives_dt_gather, aes(x = date, y = value)) +
+  geom_line() +
+  facet_grid(var_f ~., scales = "free_y",
+             labeller = as_labeller(facet_labels)) +
+  labs(title = "Monthly fluid Volumes, m3", 
+       subtitle = "Historical Production", y = "", x = "")
+```
+
+
 ### Save historical cumulatives with fixed dates
 ```{r}
 # save historical data with complete dates. 106 rows
@@ -539,6 +603,8 @@ write.csv(hist_cumulatives_dt, file = file.path(data_folder,
 
 ### Plot historical cumulatives of oil, gas and water
 
+#### Cumulative oil
+
 ```{r}
 # cumulative oil from historical production
 ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
@@ -547,6 +613,8 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Historical Production")
 ```
 
+#### Cumulative gas
+
 ```{r}
 # cumulative gas from historical production
 ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
@@ -554,6 +622,8 @@ ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
     geom_col(color = "orange", fill = "orange", alpha = 0.35) +
     ggtitle("Cumulative Gas, sm3", subtitle = "Historical Production")
 ```
+
+#### Cumulative water
 
 ```{r}
 # cumulative water from historical production
@@ -591,7 +661,11 @@ cumulatives_all <- full_join(hist_cumulatives_src, sim_cumulatives_src, by = "da
 cumulatives_all
 ```
 
+## Observations
+
 ## How close cumulative productions are
+
+### Cumulative oil. Historical vs simulator
 
 ```{r}
 # Volve reservoir model dataset
@@ -609,6 +683,8 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
+### Cumulative gas. Historical vs simulator
+
 ```{r}
 # Volve reservoir model dataset
 # plot historical vs simulator cum_gas
@@ -625,14 +701,16 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
+### Cumulative water. Historical vs simulator
+
 ```{r}
 # Volve reservoir model dataset
 # plot historical vs simulator cumulative water variable
 cols <- c("simulator"="red", "historical"="blue") # legend: colors and names
 ggplot(cumulatives_all) +
     # shade the area between the curves
-    # geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist), 
-    #             fill = "cyan", alpha = 0.35) + 
+    geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist),
+                fill = "cyan", alpha = 0.35) +
     geom_line(aes(x = date, y = cum_wat_sim, color = "simulator"), size = 1) +
     geom_line(aes(x = date, y = cum_wat_hist, color = "historical"), size = 1) +
     labs(title = "Volve reservoir model. Comparison Cumulative Water", 
@@ -640,3 +718,7 @@ ggplot(cumulatives_all) +
          y = "cumulative water, sm3") +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
+
+## Conclusions
+
+## References
