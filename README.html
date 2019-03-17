@@ -1,0 +1,869 @@
+---
+output: github_document
+---
+
+
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+<div id="a-reproducible-study-of-the-volve-reservoir-model" class="section level1">
+<h1>A reproducible study of the Volve reservoir model</h1>
+<pre class="r"><code>library(dplyr)
+library(ggplot2)
+
+# read the Eclipse PRT output report
+proj_root &lt;- rprojroot::find_rstudio_root_file()
+# had to zip the PRT file because it&#39;s 225 MB and too big for Github
+volve_2016_zip &lt;- file.path(proj_root, &quot;inst/rawdata&quot;, &quot;VOLVE_2016.zip&quot;)
+temp &lt;- tempdir()
+
+volve_2016_txt &lt;- readLines(unzip(volve_2016_zip, exdir = temp))</code></pre>
+<pre class="r"><code># get a list of rows from &quot; STEP&quot; 
+
+# find the rows where we find the word &quot; STEP&quot;
+step_rows &lt;- grep(&quot;^ STEP&quot;, volve_2016_txt)
+
+# add rows ahead to where the keyword was found
+step_info_range &lt;- lapply(seq_along(step_rows), function(x) 
+    c(step_rows[x], step_rows[x]+1:2))               # add two extra row indices
+
+step_info_range[[1]]   # sample for report page 1 only
+#&gt; [1] 1548178 1548179 1548180</code></pre>
+<p>These extra row indices are lines of text where the report keep more information of the evolution of the simulation. Here is a couple of screenhots.</p>
+<p>Step at day <code>1</code>:</p>
+<div class="figure" style="text-align: center"><span id="fig:unnamed-chunk-2"></span>
+<img src="img/step_0001.png" alt="Step at 1 day" width="600px" />
+<p class="caption">
+Figure 1: Step at 1 day
+</p>
+</div>
+<p>Step at day <code>3,197</code>:</p>
+<div class="figure" style="text-align: center"><span id="fig:unnamed-chunk-3"></span>
+<img src="img/step_3197.png" alt="Step at 3197 days" width="600px" />
+<p class="caption">
+Figure 2: Step at 3197 days
+</p>
+</div>
+<p>Now, knowing the row indices for the text we need from the <code>PRT</code> file, we can proceed to extracting those lines of text and putting them in a list, one page, or one step, per list element. We do this to later iterate through all the steps and extract the data we want.</p>
+<pre class="r"><code># get the text from all pages and put them in a list
+steps_info_txt_pages &lt;- lapply(seq_along(step_info_range), function(x) 
+    volve_2016_txt[step_info_range[[x]]])</code></pre>
+<p>This is an example of the first page for step #1.</p>
+<pre class="r"><code>steps_info_txt_pages[1]
+#&gt; [[1]]
+#&gt; [1] &quot; STEP    1 TIME=      1.00  DAYS (    +1.0  DAYS INIT  5 ITS) (1-JAN-2008)       &quot;
+#&gt; [2] &quot;  PAV=   329.6  BARSA  WCT= 0.00 GOR= 0.00000   SM3/SM3 WGR= 0.00000   SM3/SM3   &quot;
+#&gt; [3] &quot;&quot;</code></pre>
+<div id="extracting-step-data-from-the-text-file" class="section level2">
+<h2>Extracting step data from the text file</h2>
+<div id="extract-the-days-from-the-step-block" class="section level3">
+<h3>Extract the days from the STEP block</h3>
+<p>Although we could extract all the data we require from the text file in one go, it is better to see one or two examples of seeing <strong>regular expressions</strong> or <strong>regex</strong> at work. Regular expressions are practically available to all programming languages: C++, Java, JavaScript, Python, Perl, etc.</p>
+<p>In this first example, we will extract the number of days at the current simulation step. If this is the first step page:</p>
+<pre><code> STEP    1 TIME=      1.00  DAYS (    +1.0  DAYS INIT  5 ITS) (1-JAN-2008)       
+  PAV=   329.6  BARSA  WCT= 0.00 GOR= 0.00000   SM3/SM3 WGR= 0.00000   SM3/SM3</code></pre>
+<p>to extract the days we have to provide a regex pattern that detects a real number like <code>1.00</code>, which is <code>&quot;.*?(\\d+.\\d.)+.*&quot;</code>.</p>
+<p><strong>Explanation</strong></p>
+<ul>
+<li><code>.*?</code> will match any characters. lazy matching.</li>
+<li><code>(\\d+.\\d.)</code> capturing group.</li>
+<li><code>\\d+</code> matches any number of digits</li>
+<li><code>\\d.</code> matches a digit and then any character</li>
+</ul>
+<pre class="r"><code># iterate through the list of STEP pages
+days_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]   # put all pages text in a list
+    days_row_txt &lt;- page[1]                                # get 1st row of page
+    days_value &lt;- sub(&quot;.*?(\\d+.\\d.)+.*&quot;, &quot;\\1&quot;, days_row_txt,
+                      perl = TRUE) # extract the days
+    
+    # dataframe; days as double; no factors.
+    data.frame(days = as.double(days_value), stringsAsFactors = FALSE) 
+})
+
+days_df &lt;- do.call(&quot;rbind&quot;, days_dfs)</code></pre>
+</div>
+<div id="extract-the-days" class="section level3">
+<h3>Extract the days</h3>
+<p>A sample of the first ten and last ten rows for the dataframe just extracted:</p>
+<pre class="r"><code>rbind(head(days_df, 10), tail(days_df, 10))   # show the first 10 and last 10 rows
+#&gt;         days
+#&gt; 1       1.00
+#&gt; 2       1.63
+#&gt; 3       2.32
+#&gt; 4       3.50
+#&gt; 5       5.45
+#&gt; 6       8.22
+#&gt; 7      11.00
+#&gt; 8      14.61
+#&gt; 9      17.80
+#&gt; 10     21.00
+#&gt; 1601 1601.00
+#&gt; 1602 1602.00
+#&gt; 1603 1603.00
+#&gt; 1604 1604.00
+#&gt; 1605 1605.00
+#&gt; 1606 1606.00
+#&gt; 1607 1607.00
+#&gt; 1608 1608.00
+#&gt; 1609 1609.00
+#&gt; 1610 1610.00</code></pre>
+</div>
+<div id="extract-the-simulator-running-date" class="section level3">
+<h3>Extract the simulator running date</h3>
+<p>This regular expresion pattern extracts the date from the current text line.</p>
+<p><strong>Explanation</strong><br />
+* <code>.*?(\\d{1,2}-[A-Z]{3}-\\d{4}).</code> entire regex pattern<br />
+* <code>(\\d{1,2}-[A-Z]{3}-\\d{4})</code> parenthesis indicate a group to extract the date<br />
+* <code>.*?</code> match any character<br />
+* <code>\\d{1,2}</code> match one or two digits (day)<br />
+* <code>-[A-Z]{3}</code> match a dash followed by three letters (month)<br />
+* <code>-\\d{4}</code> match four digits (year)</p>
+<pre class="r"><code># iterate through the list of pages: dates
+date_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]  # put all pages text in a list
+    date_row_txt &lt;- grep(&quot; STEP&quot;, page)  # get row index at word STEP
+    date_value &lt;- sub(&quot;.*?(\\d{1,2}-[A-Z]{3}-\\d{4}).&quot;, &quot;\\1&quot;, page[date_row_txt])
+    
+    # dataframe; no factors
+    data.frame(date = date_value, stringsAsFactors = FALSE) 
+})
+
+date_df &lt;- do.call(&quot;rbind&quot;, date_dfs)
+
+# size of the dataframe: rows by columns
+dim(date_df)
+#&gt; [1] 1610    1
+
+rbind(head(date_df, 10), tail(date_df, 10))   # show the first 10 and last 10 rows
+#&gt;                   date
+#&gt; 1    1-JAN-2008       
+#&gt; 2    1-JAN-2008       
+#&gt; 3    2-JAN-2008       
+#&gt; 4    3-JAN-2008       
+#&gt; 5    5-JAN-2008       
+#&gt; 6    8-JAN-2008       
+#&gt; 7    11-JAN-2008      
+#&gt; 8    14-JAN-2008      
+#&gt; 9    17-JAN-2008      
+#&gt; 10   21-JAN-2008      
+#&gt; 1601 17-SEP-2016      
+#&gt; 1602 20-SEP-2016      
+#&gt; 1603 20-SEP-2016      
+#&gt; 1604 20-SEP-2016      
+#&gt; 1605 20-SEP-2016      
+#&gt; 1606 21-SEP-2016      
+#&gt; 1607 23-SEP-2016      
+#&gt; 1608 25-SEP-2016      
+#&gt; 1609 28-SEP-2016      
+#&gt; 1610 1-OCT-2016</code></pre>
+</div>
+<div id="extract-all-the-values-from-the-step-block" class="section level3">
+<h3>Extract all the values from the <strong>STEP</strong> block</h3>
+<p>After show this pair of examples, we continue with the extraction of the rest of the values. If you take a look at the PRT file you will recognize these are variables to be extracted:</p>
+<ul>
+<li><code>STEP</code> simulation step number</li>
+<li><code>TIME</code> number of days elpased at the simulation step</li>
+<li><code>date</code> current date at the simulation run</li>
+<li><code>PAV</code> average pressure</li>
+<li><code>WCT</code> watercut</li>
+<li><code>GOR</code> gas oil ratio</li>
+<li><code>WGR</code> water gas ratio</li>
+</ul>
+<p>The mission here is to extract all the variables that are made available by the simulator in the <strong>STEP</strong> block. As shown above, they are seven variables.</p>
+<p>The following is an R script that extract all the variables from all the occurrences of the STEP block in the PRT file. The steps are not normally sequential, they may skip a day, or be generated after “few hours” in the simulation, and they do not necessarily match the date in the <code>field totals</code> dataframe.</p>
+<pre class="r"><code># script that extracts production variables from the simulator output
+library(lubridate)
+
+# get the row indices where we find the keyword &quot; STEP&quot;
+step_rows &lt;- grep(&quot;^ STEP&quot;, volve_2016_txt)
+
+# get rows ahead range. by block of text or per page
+# in the case of the STEP block we are only interested in the next two rows
+step_info_range &lt;- lapply(seq_along(step_rows), function(x) 
+    c(step_rows[x], step_rows[x]+1:2))
+
+# get the text from all STEP pages and store each in a list element
+steps_info_txt_pages &lt;- lapply(seq_along(step_info_range), function(x) 
+    volve_2016_txt[step_info_range[[x]]])
+
+# iterate through the list of pages for the STEP blocks in the report
+step_info_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]             # load a STEP block/page
+    
+    # this is line 1
+    row_txt &lt;- grep(&quot; STEP&quot;, page)  # line 1 starts with STEP
+    # pattern extraction for 1st line of text: STEP, TIME, date
+    line_1_pattern &lt;- &quot;.*?(\\d+)+.*?(\\d+.\\d+)+.*?(\\d+)+.*?(\\d{1,2}-[A-Z]{3}-\\d{4})+.*&quot;
+    step_value &lt;- sub(line_1_pattern, &quot;\\1&quot;, page[row_txt], perl = TRUE) # extract step
+    days_value &lt;- sub(line_1_pattern, &quot;\\2&quot;, page[row_txt], perl = TRUE) # extract days
+    date_value &lt;- sub(line_1_pattern, &quot;\\4&quot;, page[row_txt], perl = TRUE) # extract date
+    date_value &lt;- sub(&quot;JLY&quot;, &quot;JUL&quot;, date_value)              # change JLY by JUL
+    
+    
+    # this is line 2
+    row_txt &lt;- grep(&quot; PAV&quot;, page) # line 2 starts with PAV=
+    # pattern extraction for 2nd line of text: PAV, WCT, GOR, WGR
+    line_2_pattern &lt;- &quot;.*?(\\d+.\\d+)+.*?(\\d+.\\d+)+.*?(\\d+.\\d+)+.*?(\\d+.\\d+).*&quot;
+    pav_value &lt;- sub(line_2_pattern, &quot;\\1&quot;, page[row_txt], perl = TRUE) # Get avg pres
+    wct_value &lt;- sub(line_2_pattern, &quot;\\2&quot;, page[row_txt], perl = TRUE) # get WCT
+    gor_value &lt;- sub(line_2_pattern, &quot;\\3&quot;, page[row_txt], perl = TRUE) # get GOR
+    wgr_value &lt;- sub(line_2_pattern, &quot;\\4&quot;, page[row_txt], perl = TRUE) # get WGR
+    
+    # dataframe; 
+    data.frame(step = as.integer(step_value), 
+               date = dmy(date_value),
+               # date = date_value, 
+               time_days = as.double(days_value), 
+               pav_bar   = as.double(pav_value),
+               wct_pct   = as.double(wct_value),
+               gor_m3m3  = as.double(gor_value), 
+               wgr_m3m3  = as.double(wgr_value),
+               stringsAsFactors = FALSE) 
+})
+
+step_info &lt;- do.call(&quot;rbind&quot;, step_info_dfs) # put together all dataframes in list
+
+# show a summary of the dataframe
+glimpse(step_info)
+#&gt; Observations: 1,610
+#&gt; Variables: 7
+#&gt; $ step      &lt;int&gt; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1...
+#&gt; $ date      &lt;date&gt; 2008-01-01, 2008-01-01, 2008-01-02, 2008-01-03, 200...
+#&gt; $ time_days &lt;dbl&gt; 1.00, 1.63, 2.32, 3.50, 5.45, 8.22, 11.00, 14.61, 17...
+#&gt; $ pav_bar   &lt;dbl&gt; 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329...
+#&gt; $ wct_pct   &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0...
+#&gt; $ gor_m3m3  &lt;dbl&gt; 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00...
+#&gt; $ wgr_m3m3  &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0...</code></pre>
+<pre class="r"><code># show as a tibble
+(step_info &lt;- as_tibble(step_info))
+#&gt; # A tibble: 1,610 x 7
+#&gt;     step date       time_days pav_bar wct_pct gor_m3m3 wgr_m3m3
+#&gt;    &lt;int&gt; &lt;date&gt;         &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+#&gt;  1     1 2008-01-01      1       330.       0        0        0
+#&gt;  2     2 2008-01-01      1.63    330.       0        0        0
+#&gt;  3     3 2008-01-02      2.32    330.       0        0        0
+#&gt;  4     4 2008-01-03      3.5     330.       0        0        0
+#&gt;  5     5 2008-01-05      5.45    330.       0        0        0
+#&gt;  6     6 2008-01-08      8.22    330.       0        0        0
+#&gt;  7     7 2008-01-11     11       330.       0        0        0
+#&gt;  8     8 2008-01-14     14.6     330.       0        0        0
+#&gt;  9     9 2008-01-17     17.8     330.       0        0        0
+#&gt; 10    10 2008-01-21     21       330.       0        0        0
+#&gt; # ... with 1,600 more rows</code></pre>
+<p>The name of the variables in the dataframe:</p>
+<pre class="r"><code>names(step_info)
+#&gt; [1] &quot;step&quot;      &quot;date&quot;      &quot;time_days&quot; &quot;pav_bar&quot;   &quot;wct_pct&quot;   &quot;gor_m3m3&quot; 
+#&gt; [7] &quot;wgr_m3m3&quot;</code></pre>
+<p>You can see that the step do not carry any data regarding cumulative production.</p>
+</div>
+<div id="sample-of-the-step-dataframe" class="section level3">
+<h3>Sample of the step dataframe</h3>
+<p>Let’s test the first day and last day of the simulation:</p>
+<pre class="r"><code>tail(step_info$date,1) - head(step_info$date,1)
+#&gt; Time difference of 3196 days</code></pre>
+</div>
+<div id="save-to-data-files" class="section level3">
+<h3>Save to data files</h3>
+<pre class="r"><code>data_folder &lt;- file.path(proj_root, &quot;data&quot;)
+
+save(step_info, file = file.path(data_folder, &quot;data_from_step.Rdata&quot;))
+write.csv(step_info, file = file.path(data_folder, 
+                                         &quot;data_from_step.CSV&quot;), 
+          row.names = FALSE)</code></pre>
+</div>
+<div id="plots-from-the-step-block" class="section level3">
+<h3>Plots from the step block</h3>
+<div id="plot-pressure-vs-time" class="section level4">
+<h4>Plot pressure vs time</h4>
+<p>Now, we take a look at the pressure over the life of the field, from the simulator perspective.</p>
+<pre class="r"><code>ggplot(step_info, aes(x =date, y = pav_bar)) +
+    geom_line(color = &quot;red&quot;) +
+    labs(title = &quot;Pressure over time&quot;, subtitle = &quot;Simulator output&quot;,
+         y = &quot;Average Pressure (PAV), bar&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-14-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="plot-watercut-vs-time" class="section level4">
+<h4>Plot watercut vs time</h4>
+<pre class="r"><code># plot from PRT simulator output (STEP block)
+ggplot(step_info, aes(x =date, y = wct_pct)) +
+    geom_line(color = &quot;blue&quot;) +
+    labs(title = &quot;Field watercut over time&quot;, subtitle = &quot;Simulator output&quot;,
+         y = &quot;Watercut, percent&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-15-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>library(tidyr)
+
+step_info_gather &lt;- 
+step_info %&gt;% 
+  select(-c(step, time_days)) %&gt;% 
+  gather(key = var, value, pav_bar:wgr_m3m3) %&gt;% 
+  print()
+#&gt; # A tibble: 6,440 x 3
+#&gt;    date       var     value
+#&gt;    &lt;date&gt;     &lt;chr&gt;   &lt;dbl&gt;
+#&gt;  1 2008-01-01 pav_bar  330.
+#&gt;  2 2008-01-01 pav_bar  330.
+#&gt;  3 2008-01-02 pav_bar  330.
+#&gt;  4 2008-01-03 pav_bar  330.
+#&gt;  5 2008-01-05 pav_bar  330.
+#&gt;  6 2008-01-08 pav_bar  330.
+#&gt;  7 2008-01-11 pav_bar  330.
+#&gt;  8 2008-01-14 pav_bar  330.
+#&gt;  9 2008-01-17 pav_bar  330.
+#&gt; 10 2008-01-21 pav_bar  330.
+#&gt; # ... with 6,430 more rows</code></pre>
+</div>
+</div>
+<div id="plot-all-variables-from-step-block" class="section level3">
+<h3>Plot all variables from <code>STEP</code> block</h3>
+<pre class="r"><code># plot production variables from the STEP block in the PRT file
+
+# change the name of the facet labels
+facet_labels &lt;- c(`gor_m3m3` = &quot;GOR, m3/m3&quot;, `pav_bar` = &quot;Avg.Pres, bar&quot;,
+                  `wct_pct` = &quot;Watercut, %&quot;, `wgr_m3m3` = &quot;Water Gas Ratio, m3/m3&quot;)
+
+ggplot(step_info_gather, aes(x = date, y = value)) +
+  geom_line() +
+  facet_wrap(.~var, scales = &quot;free_y&quot;, labeller = as_labeller(facet_labels)) +
+  labs(title = &quot;Production variables from STEP block&quot;, 
+       subtitle = &quot;Simulator output&quot;, y = &quot;&quot;, x = &quot;&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-17-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="merge-cumulative-oil-with-simulator-steps" class="section level2">
+<h2>Merge cumulative oil with simulator steps</h2>
+<p>Next step is combining the data from the steps dataframe with the production cumulatives. This is not an straight operation since both dataframe have different date references.</p>
+<ol style="list-style-type: decimal">
+<li>First, we will extract the production cumulatives from the PRT file. This is something we already did in the previous article. We will load that script.</li>
+</ol>
+</div>
+<div id="extract-field-cumulatives-from-the-balance-at-block" class="section level2">
+<h2>Extract Field cumulatives from the <code>BALANCE-AT</code> block</h2>
+<pre class="r"><code>r_folder &lt;- file.path(proj_root, &quot;R&quot;)
+r_script &lt;- file.path(r_folder, &quot;extract_data_from_prt.R&quot;)
+source(r_script)
+
+field_totals &lt;- extract_field_totals(prt_file_content = volve_2016_txt)
+field_totals
+#&gt; # A tibble: 340 x 8
+#&gt;    date        days     ocip     ooip oil_otw wat_otw  gas_otw   pav
+#&gt;    &lt;date&gt;     &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1 2007-12-31     0 21967455 21967455       0       0        0  330.
+#&gt;  2 2008-01-11    11 21967456 21967455       0       0        0  330.
+#&gt;  3 2008-01-21    21 21967455 21967455       0       0        0  330.
+#&gt;  4 2008-01-31    31 21967454 21967455       0       0        0  330.
+#&gt;  5 2008-02-10    41 21967454 21967455       0       0        0  330.
+#&gt;  6 2008-02-20    51 21948189 21967455   19265       0  3055593  325.
+#&gt;  7 2008-02-26    57 21936614 21967455   30840       0  4884638  323.
+#&gt;  8 2008-03-01    61 21925419 21967455   42035       0  6650055  320.
+#&gt;  9 2008-03-11    71 21897024 21967455   70430       0 11113293  314.
+#&gt; 10 2008-03-21    81 21867231 21967455  100223       1 15777548  308.
+#&gt; # ... with 330 more rows</code></pre>
+<div id="save-field-totals-to-data-files" class="section level4">
+<h4>Save field totals to data files</h4>
+<pre class="r"><code># save the data
+data_folder &lt;- file.path(proj_root, &quot;data&quot;)
+save(field_totals, file = file.path(data_folder, &quot;field_totals_balance.Rdata&quot;))
+write.csv(field_totals, file = file.path(data_folder, 
+                                         &quot;field_totals_balance.CSV&quot;), 
+          row.names = FALSE)</code></pre>
+<pre class="r"><code># plot from PRT simulator output (BALANCE AT block)
+ggplot(field_totals, aes(x =date, y = wat_otw)) +
+    geom_line(color = &quot;blue&quot;) +
+    labs(title = &quot;Field Water Outflow Through Wells&quot;, 
+         subtitle = &quot;Simulator output, BALANCE block&quot;,
+         y = &quot;Water volume, sm3&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-20-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>Now, we know that the STEP dataframe has more rows than the BALANCE-AT dataframe. What we want is to correlate the step with the oil cumulatives.</p>
+<pre class="r"><code>dim(step_info)
+#&gt; [1] 1610    7</code></pre>
+<pre class="r"><code>dim(field_totals)
+#&gt; [1] 340   8</code></pre>
+</div>
+</div>
+<div id="join-field-totals-and-step-dataframes" class="section level2">
+<h2>Join field totals and step dataframes</h2>
+<p>We merge both tables, steps and field cumulatives.</p>
+<pre class="r"><code># join both tables by the common variable &quot;date&quot;
+step_totals &lt;- 
+left_join(step_info, field_totals, by = &quot;date&quot;) %&gt;% 
+    na.omit() %&gt;% 
+    select(date, time_days, days, everything()) %&gt;% 
+    as_tibble() %&gt;% 
+    print
+#&gt; # A tibble: 524 x 14
+#&gt;    date       time_days  days  step pav_bar wct_pct gor_m3m3 wgr_m3m3
+#&gt;    &lt;date&gt;         &lt;dbl&gt; &lt;int&gt; &lt;int&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+#&gt;  1 2008-01-11      11      11     7    330.       0       0         0
+#&gt;  2 2008-01-21      21      21    10    330.       0       0         0
+#&gt;  3 2008-01-31      31      31    13    330.       0       0         0
+#&gt;  4 2008-02-10      41      41    15    330.       0       0         0
+#&gt;  5 2008-02-20      51      51    17    325.       0     158.        0
+#&gt;  6 2008-02-26      57      57    18    323.       0     158.        0
+#&gt;  7 2008-03-01      61      61    19    320.       0     158.        0
+#&gt;  8 2008-03-11      71      71    21    314.       0     157.        0
+#&gt;  9 2008-03-21      81      81    23    308.       0     156.        0
+#&gt; 10 2008-03-21      81.5    81    24    308        0     156.        0
+#&gt; # ... with 514 more rows, and 6 more variables: ocip &lt;dbl&gt;, ooip &lt;dbl&gt;,
+#&gt; #   oil_otw &lt;dbl&gt;, wat_otw &lt;dbl&gt;, gas_otw &lt;dbl&gt;, pav &lt;dbl&gt;</code></pre>
+<div id="plot-outflow-through-wells-from-simulator" class="section level3">
+<h3>Plot outflow through wells from simulator</h3>
+<pre class="r"><code>ggplot(step_totals, aes(x = date, y = oil_otw)) +
+    geom_line(color = &quot;dark green&quot;, size = 1.1) +
+    # geom_line(aes(x= date, y = ocip))
+    # geom_col(aes(x= date, y = ocip)) + 
+    ggtitle(&quot;Cumulative Oil, sm3&quot;, subtitle = &quot;Simulator&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-24-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggplot(step_totals, aes(x = date, y = gas_otw)) +
+    geom_line(color = &quot;orange&quot;, size = 1.1) +
+    labs(title = &quot;Cumulative Gas&quot;, subtitle = &quot;Simulator&quot;,
+         y = &quot;Cumulative Gas, sm3&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-25-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggplot(step_totals, aes(x = date, y = wat_otw)) +
+    geom_line(color = &quot;blue&quot;, size = 1.1) +
+    labs(title = &quot;Cumulative Water&quot;, subtitle = &quot;Simulator&quot;,
+         y = &quot;Cumulative Water, sm3&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-26-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="calculate-cumulatives-for-oil-gas-and-water" class="section level3">
+<h3>Calculate cumulatives for oil, gas and water</h3>
+<pre class="r"><code># step field totals
+sim_cumulatives &lt;- 
+step_totals %&gt;% 
+    select(date, oil_otw, gas_otw, wat_otw) %&gt;% 
+    mutate(oil_this_period = oil_otw - lag(oil_otw, default = 0)) %&gt;%
+    mutate(gas_this_period = gas_otw - lag(gas_otw, default = 0)) %&gt;%
+    mutate(wat_this_period = wat_otw - lag(wat_otw, default = 0)) %&gt;% 
+    mutate(year = year(date), month = month(date)) %&gt;%
+    group_by(year, month) %&gt;%
+    summarize(vol_oil = sum(oil_this_period), 
+              vol_gas = sum(gas_this_period), 
+              vol_wat = sum(wat_this_period)) %&gt;%
+    ungroup() %&gt;%
+    mutate(date = ymd(paste(year, month, &quot;01&quot;, sep = &quot;-&quot;))) %&gt;%
+    # mutate(source = &quot;simulator&quot;) %&gt;%
+    mutate(cum_oil = cumsum(vol_oil), 
+           cum_gas = cumsum(vol_gas), 
+           cum_wat = cumsum(vol_wat)) %&gt;%
+    select(date, year, month, everything()) %&gt;%
+    print()
+#&gt; # A tibble: 106 x 9
+#&gt;    date        year month vol_oil  vol_gas vol_wat cum_oil  cum_gas cum_wat
+#&gt;    &lt;date&gt;     &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2008-01-01  2008     1       0        0       0       0   0.           0
+#&gt;  2 2008-02-01  2008     2   30840  4884638       0   30840   4.88e6       0
+#&gt;  3 2008-03-01  2008     3   90029 14117066       1  120869   1.90e7       1
+#&gt;  4 2008-04-01  2008     4   73833 11469357   22292  194702   3.05e7   22293
+#&gt;  5 2008-05-01  2008     5  124196 19115952  212550  318898   4.96e7  234843
+#&gt;  6 2008-06-01  2008     6  137247 20967327  192961  456145   7.06e7  427804
+#&gt;  7 2008-07-01  2008     7  155664 24005385  212739  611809   9.46e7  640543
+#&gt;  8 2008-08-01  2008     8  170057 26420155  227653  781866   1.21e8  868196
+#&gt;  9 2008-09-01  2008     9  163015 25205884  137169  944881   1.46e8 1005365
+#&gt; 10 2008-10-01  2008    10  221230 33570835  317736 1166111   1.80e8 1323101
+#&gt; # ... with 96 more rows</code></pre>
+<pre class="r"><code># create a dataframe with complete dates from 2008 until Oct-2016
+# this will fill any holes in the dates of any of the two dataframes
+dates_complete &lt;- as_tibble(data.frame(date= seq.Date(as.Date(&quot;2008-01-01&quot;), 
+                                          as.Date(&quot;2016-10-01&quot;), by = &quot;month&quot;),
+                 cum_oil = 0, cum_gas = 0, cum_wat = 0))
+dates_complete
+#&gt; # A tibble: 106 x 4
+#&gt;    date       cum_oil cum_gas cum_wat
+#&gt;    &lt;date&gt;       &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2008-01-01       0       0       0
+#&gt;  2 2008-02-01       0       0       0
+#&gt;  3 2008-03-01       0       0       0
+#&gt;  4 2008-04-01       0       0       0
+#&gt;  5 2008-05-01       0       0       0
+#&gt;  6 2008-06-01       0       0       0
+#&gt;  7 2008-07-01       0       0       0
+#&gt;  8 2008-08-01       0       0       0
+#&gt;  9 2008-09-01       0       0       0
+#&gt; 10 2008-10-01       0       0       0
+#&gt; # ... with 96 more rows</code></pre>
+<p>There are 106 months start to end of production.</p>
+<pre class="r"><code># simulator production
+# merge incomplete dataframe and fill with complete dates
+# there will be blank rows or NAs where previously was not data
+sim_cumulatives_dt &lt;-
+left_join(dates_complete, sim_cumulatives, by = &quot;date&quot;) %&gt;% 
+    # remove NAs from the cumulatives .y
+    tidyr::replace_na(list(cum_oil.y = 0, vol_oil = 0,
+                           cum_gas.y = 0, vol_gas = 0,
+                           cum_wat.y = 0, vol_wat = 0)) %&gt;%        # replace NAs with zeros
+    # add up cumulatives .x and .y
+    mutate(cum_oil = cum_oil.x + cum_oil.y, 
+           cum_gas = cum_gas.x + cum_gas.y,
+           cum_wat = cum_wat.x + cum_wat.y) %&gt;%       # sum cumulatives
+    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat) %&gt;%
+    # replace 0s with previous cumulative. these were rows that didn&#39;t exist
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default = 0), cum_oil)) %&gt;%
+    mutate(cum_gas = ifelse(cum_gas == 0, lag(cum_gas, default = 0), cum_gas)) %&gt;%
+    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default = 0), cum_wat)) %&gt;%
+    mutate(vol_oil = ifelse(vol_oil == 0, lag(vol_oil, default = 0), vol_oil)) %&gt;%
+    mutate(vol_gas = ifelse(vol_gas == 0, lag(vol_gas, default = 0), vol_gas)) %&gt;%
+    mutate(vol_oil = ifelse(vol_wat == 0, lag(vol_wat, default = 0), vol_wat)) %&gt;%
+    as_tibble() %&gt;% 
+    print
+#&gt; # A tibble: 106 x 7
+#&gt;    date       cum_oil   cum_gas cum_wat vol_oil  vol_gas vol_wat
+#&gt;    &lt;date&gt;       &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2008-01-01       0         0       0       0        0       0
+#&gt;  2 2008-02-01   30840   4884638       0       0  4884638       0
+#&gt;  3 2008-03-01  120869  19001704       1       1 14117066       1
+#&gt;  4 2008-04-01  194702  30471061   22293   22292 11469357   22292
+#&gt;  5 2008-05-01  318898  49587013  234843  212550 19115952  212550
+#&gt;  6 2008-06-01  456145  70554340  427804  192961 20967327  192961
+#&gt;  7 2008-07-01  611809  94559725  640543  212739 24005385  212739
+#&gt;  8 2008-08-01  781866 120979880  868196  227653 26420155  227653
+#&gt;  9 2008-09-01  944881 146185764 1005365  137169 25205884  137169
+#&gt; 10 2008-10-01 1166111 179756599 1323101  317736 33570835  317736
+#&gt; # ... with 96 more rows</code></pre>
+<p>The negative volume of water and oil are corrections.</p>
+</div>
+</div>
+<div id="comparative-of-simulator-vs-historical-production" class="section level2">
+<h2>Comparative of simulator vs historical production</h2>
+<pre class="r"><code># load historical production from Excel file
+library(xlsx)   # library to read Excel files in R
+
+# read the Excel file
+proj_root &lt;- rprojroot::find_rstudio_root_file()   # get the project root folder
+xl_file &lt;- file.path(proj_root, &quot;inst/rawdata&quot;, &quot;Volve production data.xlsx&quot;)
+# read only the monthly production
+prod_hist &lt;- as_tibble(read.xlsx(xl_file, sheetName = &quot;Monthly Production Data&quot;))
+prod_hist
+#&gt; # A tibble: 529 x 10
+#&gt;    Wellbore.name NPDCode  Year Month On.Stream Oil   Gas   Water GI   
+#&gt;    &lt;fct&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;     &lt;fct&gt; &lt;fct&gt; &lt;fct&gt; &lt;fct&gt;
+#&gt;  1 15/9-F-4         5693  2007     9 NULL      NULL  NULL  NULL  NULL 
+#&gt;  2 15/9-F-5         5769  2007     9 NULL      NULL  NULL  NULL  NULL 
+#&gt;  3 15/9-F-4         5693  2007    10 NULL      NULL  NULL  NULL  NULL 
+#&gt;  4 15/9-F-5         5769  2007    10 NULL      NULL  NULL  NULL  NULL 
+#&gt;  5 15/9-F-4         5693  2007    11 NULL      NULL  NULL  NULL  NULL 
+#&gt;  6 15/9-F-5         5769  2007    11 NULL      NULL  NULL  NULL  NULL 
+#&gt;  7 15/9-F-4         5693  2007    12 NULL      NULL  NULL  NULL  NULL 
+#&gt;  8 15/9-F-5         5769  2007    12 NULL      NULL  NULL  NULL  NULL 
+#&gt;  9 15/9-F-4         5693  2008     1 0         NULL  NULL  NULL  NULL 
+#&gt; 10 15/9-F-5         5769  2008     1 0         NULL  NULL  NULL  NULL 
+#&gt; # ... with 519 more rows, and 1 more variable: WI &lt;fct&gt;</code></pre>
+<div id="save-raw-production-history-to-data-files" class="section level3">
+<h3>Save raw production history to data files</h3>
+<pre class="r"><code># save historical data as raw
+data_folder &lt;- file.path(proj_root, &quot;data&quot;)
+save(prod_hist, file = file.path(data_folder, &quot;production_history_raw.Rdata&quot;))
+write.csv(prod_hist, file = file.path(data_folder, 
+                                         &quot;production_history_raw.CSV&quot;), 
+          row.names = FALSE)</code></pre>
+</div>
+<div id="cumulatives-from-production-history" class="section level3">
+<h3>Cumulatives from production history</h3>
+<pre class="r"><code>hist_cumulatives &lt;- 
+prod_hist %&gt;% 
+    mutate(Oil = as.double(as.character(Oil))) %&gt;%
+    mutate(Gas = as.double(as.character(Gas))) %&gt;%
+    mutate(Water = as.double(as.character(Water))) %&gt;% 
+    mutate(Year = as.integer(as.character(Year))) %&gt;%
+    mutate(Month = as.integer(as.character(Month))) %&gt;%
+    mutate(GI = as.double(as.character(GI))) %&gt;%
+    mutate(WI = as.double(as.character(WI))) %&gt;%
+    tidyr::replace_na(list(GI = 0, WI = 0)) %&gt;%
+    select(-c(NPDCode, On.Stream)) %&gt;% 
+    rename(year = Year, month = Month, oil = Oil, gas = Gas, wat = Water) %&gt;% 
+    na.omit() %&gt;%                 # remove all rows that have at least one NA
+    group_by(year, month) %&gt;%
+    summarise(vol_oil = sum(oil), vol_gas = sum(gas), vol_wat = sum(wat),
+              vol_gi = sum(GI), vol_wi = sum(WI)) %&gt;%
+    mutate(date = ymd(paste(year, month, &quot;01&quot;, sep = &quot;-&quot;))) %&gt;%
+    arrange(date) %&gt;%
+    ungroup() %&gt;%
+    select(date, vol_oil, vol_gas, vol_wat, vol_gi, vol_wi) %&gt;%
+    mutate(cum_oil = cumsum(vol_oil), cum_gas = cumsum(vol_gas),
+           cum_wat = cumsum(vol_wat), 
+           cum_gi = cumsum(vol_gi), cum_wi = cumsum(vol_wi)) %&gt;%
+    print()
+#&gt; # A tibble: 104 x 11
+#&gt;    date       vol_oil vol_gas vol_wat vol_gi vol_wi cum_oil cum_gas cum_wat
+#&gt;    &lt;date&gt;       &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2008-02-01  49091.  7.07e6   413.       0      0  4.91e4  7.07e6    413.
+#&gt;  2 2008-03-01  83361.  1.22e7    27.4      0      0  1.32e5  1.93e7    440.
+#&gt;  3 2008-04-01  74532.  1.15e7   482.       0      0  2.07e5  3.08e7    922.
+#&gt;  4 2008-05-01 125479.  1.91e7 16280.       0      0  3.32e5  4.99e7  17202.
+#&gt;  5 2008-06-01 143787.  2.15e7   474.       0      0  4.76e5  7.14e7  17677.
+#&gt;  6 2008-07-01 166280.  2.47e7   416.       0      0  6.43e5  9.60e7  18093.
+#&gt;  7 2008-08-01 165444.  2.39e7   577.       0      0  8.08e5  1.20e8  18669.
+#&gt;  8 2008-09-01 192263.  2.75e7   464.       0      0  1.00e6  1.47e8  19134.
+#&gt;  9 2008-10-01 237174.  3.38e7   725.       0      0  1.24e6  1.81e8  19859.
+#&gt; 10 2008-11-01 250325.  3.57e7  2580.       0      0  1.49e6  2.17e8  22439.
+#&gt; # ... with 94 more rows, and 2 more variables: cum_gi &lt;dbl&gt;, cum_wi &lt;dbl&gt;</code></pre>
+</div>
+<div id="save-historical-cumulatives-as-is" class="section level3">
+<h3>Save historical cumulatives as-is</h3>
+<pre class="r"><code># save historical data
+data_folder &lt;- file.path(proj_root, &quot;data&quot;)
+save(hist_cumulatives, file = file.path(data_folder, &quot;hist_cumulatives_104.Rdata&quot;))
+write.csv(hist_cumulatives, file = file.path(data_folder, 
+                                         &quot;hist_cumulatives_104.CSV&quot;), 
+          row.names = FALSE)</code></pre>
+<pre class="r"><code># create a dataframe with complete dates from 2008 until Oct-2016
+df &lt;- as_tibble(data.frame(date= seq.Date(as.Date(&quot;2008-01-01&quot;), 
+                                          as.Date(&quot;2016-10-01&quot;), by = &quot;month&quot;),
+                 cum_oil = 0, cum_gas = 0, cum_wat = 0))
+df
+#&gt; # A tibble: 106 x 4
+#&gt;    date       cum_oil cum_gas cum_wat
+#&gt;    &lt;date&gt;       &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2008-01-01       0       0       0
+#&gt;  2 2008-02-01       0       0       0
+#&gt;  3 2008-03-01       0       0       0
+#&gt;  4 2008-04-01       0       0       0
+#&gt;  5 2008-05-01       0       0       0
+#&gt;  6 2008-06-01       0       0       0
+#&gt;  7 2008-07-01       0       0       0
+#&gt;  8 2008-08-01       0       0       0
+#&gt;  9 2008-09-01       0       0       0
+#&gt; 10 2008-10-01       0       0       0
+#&gt; # ... with 96 more rows</code></pre>
+<pre class="r"><code># historical production
+# merge incomplete dataframe and complete with dates
+hist_cumulatives_dt &lt;- 
+left_join(df, hist_cumulatives, by = &quot;date&quot;) %&gt;% 
+    # replace NAs with zeros
+    tidyr::replace_na(list(cum_oil.y = 0, cum_gas.y = 0, cum_wat.y = 0)) %&gt;%
+    tidyr::replace_na(list(vol_oil = 0, vol_gas = 0, vol_wat = 0)) %&gt;%
+    tidyr::replace_na(list(vol_gi = 0, vol_wi = 0, cum_gi = 0, cum_wi = 0)) %&gt;%
+    # add up the extra column .y
+    mutate(cum_oil = cum_oil.x + cum_oil.y) %&gt;%
+    mutate(cum_gas = cum_gas.x + cum_gas.y) %&gt;%
+    mutate(cum_wat = cum_wat.x + cum_wat.y) %&gt;%
+    # filter(date != as.Date(&quot;2016-10-01&quot;)) %&gt;% 
+    # this fixes the zeros generated by adding complete dates
+    mutate(cum_oil = ifelse(cum_oil == 0, lag(cum_oil, default=0), cum_oil)) %&gt;%
+    mutate(cum_gas = ifelse(cum_gas == 0, lag(cum_gas, default=0), cum_gas)) %&gt;%
+    mutate(cum_wat = ifelse(cum_wat == 0, lag(cum_wat, default=0), cum_wat)) %&gt;%
+    mutate(cum_gi = ifelse(cum_gi == 0, lag(cum_gi, default=0), cum_gi)) %&gt;% 
+    mutate(cum_wi = ifelse(cum_wi == 0, lag(cum_wi, default=0), cum_wi)) %&gt;% 
+    select(date, cum_oil, cum_gas, cum_wat, vol_oil, vol_gas, vol_wat, 
+           vol_gi, vol_wi, cum_gi, cum_wi) %&gt;%
+    as_tibble() %&gt;% 
+    print
+#&gt; # A tibble: 106 x 11
+#&gt;    date       cum_oil cum_gas cum_wat vol_oil vol_gas vol_wat vol_gi vol_wi
+#&gt;    &lt;date&gt;       &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;
+#&gt;  1 2008-01-01  0.      0.          0       0   0.         0        0      0
+#&gt;  2 2008-02-01  4.91e4  7.07e6    413.  49091.  7.07e6   413.       0      0
+#&gt;  3 2008-03-01  1.32e5  1.93e7    440.  83361.  1.22e7    27.4      0      0
+#&gt;  4 2008-04-01  2.07e5  3.08e7    922.  74532.  1.15e7   482.       0      0
+#&gt;  5 2008-05-01  3.32e5  4.99e7  17202. 125479.  1.91e7 16280.       0      0
+#&gt;  6 2008-06-01  4.76e5  7.14e7  17677. 143787.  2.15e7   474.       0      0
+#&gt;  7 2008-07-01  6.43e5  9.60e7  18093. 166280.  2.47e7   416.       0      0
+#&gt;  8 2008-08-01  8.08e5  1.20e8  18669. 165444.  2.39e7   577.       0      0
+#&gt;  9 2008-09-01  1.00e6  1.47e8  19134. 192263.  2.75e7   464.       0      0
+#&gt; 10 2008-10-01  1.24e6  1.81e8  19859. 237174.  3.38e7   725.       0      0
+#&gt; # ... with 96 more rows, and 2 more variables: cum_gi &lt;dbl&gt;, cum_wi &lt;dbl&gt;</code></pre>
+</div>
+<div id="plot-production-rates" class="section level3">
+<h3>Plot production rates</h3>
+<p>gather(key = var, value, pav_bar:wgr_m3m3) %&gt;%</p>
+<pre class="r"><code>hist_cumulatives_dt_gather &lt;- 
+hist_cumulatives_dt %&gt;% 
+  select(date, vol_oil, vol_gas, vol_wat) %&gt;% 
+  gather(key = var, value, vol_oil:vol_wat) %&gt;% 
+  
+  print()
+#&gt; # A tibble: 318 x 3
+#&gt;    date       var       value
+#&gt;    &lt;date&gt;     &lt;chr&gt;     &lt;dbl&gt;
+#&gt;  1 2008-01-01 vol_oil      0 
+#&gt;  2 2008-02-01 vol_oil  49091.
+#&gt;  3 2008-03-01 vol_oil  83361.
+#&gt;  4 2008-04-01 vol_oil  74532.
+#&gt;  5 2008-05-01 vol_oil 125479.
+#&gt;  6 2008-06-01 vol_oil 143787.
+#&gt;  7 2008-07-01 vol_oil 166280.
+#&gt;  8 2008-08-01 vol_oil 165444.
+#&gt;  9 2008-09-01 vol_oil 192263.
+#&gt; 10 2008-10-01 vol_oil 237174.
+#&gt; # ... with 308 more rows</code></pre>
+<pre class="r"><code># plot production variables from the STEP block in the PRT file
+
+# order of the plots
+hist_cumulatives_dt_gather$var_f &lt;- 
+  factor(hist_cumulatives_dt_gather$var, 
+         levels = c(&quot;vol_oil&quot;, &quot;vol_gas&quot;, &quot;vol_wat&quot;))
+
+# change the name of the facet labels
+facet_labels &lt;- c(`vol_oil` = &quot;Oil&quot;, `vol_gas` = &quot;Gas&quot;, `vol_wat` = &quot;Water&quot;)
+
+ggplot(hist_cumulatives_dt_gather, aes(x = date, y = value)) +
+  geom_line() +
+  facet_grid(var_f ~., scales = &quot;free_y&quot;,
+             labeller = as_labeller(facet_labels)) +
+  labs(title = &quot;Monthly fluid Volumes, m3&quot;, 
+       subtitle = &quot;Historical Production&quot;, y = &quot;&quot;, x = &quot;&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-37-1.png" width="576" style="display: block; margin: auto;" /></p>
+</div>
+<div id="save-historical-cumulatives-with-fixed-dates" class="section level3">
+<h3>Save historical cumulatives with fixed dates</h3>
+<pre class="r"><code># save historical data with complete dates. 106 rows
+data_folder &lt;- file.path(proj_root, &quot;data&quot;)
+save(hist_cumulatives_dt, file = file.path(data_folder, &quot;hist_cumulatives_dt.Rdata&quot;))
+write.csv(hist_cumulatives_dt, file = file.path(data_folder, 
+                                         &quot;hist_cumulatives_dt.CSV&quot;), 
+          row.names = FALSE)</code></pre>
+</div>
+<div id="plot-historical-cumulatives-of-oil-gas-and-water" class="section level3">
+<h3>Plot historical cumulatives of oil, gas and water</h3>
+<div id="cumulative-oil" class="section level4">
+<h4>Cumulative oil</h4>
+<pre class="r"><code># cumulative oil from historical production
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_oil)) +
+    geom_line() +
+    geom_col(color = &quot;dark green&quot;, fill = &quot;dark green&quot;, alpha = 0.35) +
+    ggtitle(&quot;Cumulative Oil, sm3&quot;, subtitle = &quot;Historical Production&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-39-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="cumulative-gas" class="section level4">
+<h4>Cumulative gas</h4>
+<pre class="r"><code># cumulative gas from historical production
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_gas)) +
+    geom_line() +
+    geom_col(color = &quot;orange&quot;, fill = &quot;orange&quot;, alpha = 0.35) +
+    ggtitle(&quot;Cumulative Gas, sm3&quot;, subtitle = &quot;Historical Production&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-40-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="cumulative-water" class="section level4">
+<h4>Cumulative water</h4>
+<pre class="r"><code># cumulative water from historical production
+ggplot(hist_cumulatives_dt, aes(x = date, y = cum_wat)) +
+    geom_line() +
+    geom_col(color = &quot;blue&quot;, fill = &quot;blue&quot;, alpha = 0.35) +
+    ggtitle(&quot;Cumulative Water, sm3&quot;, subtitle = &quot;Historical Production&quot;)</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-41-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="rename-the-variables-according-to-source" class="section level3">
+<h3>Rename the variables according to source</h3>
+<pre class="r"><code># rename the simulation cumulatives
+sim_cumulatives_src &lt;- 
+sim_cumulatives_dt %&gt;% 
+    select(date, cum_oil, cum_gas, cum_wat) %&gt;% 
+    rename(cum_oil_sim = cum_oil, cum_gas_sim = cum_gas, cum_wat_sim = cum_wat) %&gt;% 
+    print()
+#&gt; # A tibble: 106 x 4
+#&gt;    date       cum_oil_sim cum_gas_sim cum_wat_sim
+#&gt;    &lt;date&gt;           &lt;dbl&gt;       &lt;dbl&gt;       &lt;dbl&gt;
+#&gt;  1 2008-01-01           0           0           0
+#&gt;  2 2008-02-01       30840     4884638           0
+#&gt;  3 2008-03-01      120869    19001704           1
+#&gt;  4 2008-04-01      194702    30471061       22293
+#&gt;  5 2008-05-01      318898    49587013      234843
+#&gt;  6 2008-06-01      456145    70554340      427804
+#&gt;  7 2008-07-01      611809    94559725      640543
+#&gt;  8 2008-08-01      781866   120979880      868196
+#&gt;  9 2008-09-01      944881   146185764     1005365
+#&gt; 10 2008-10-01     1166111   179756599     1323101
+#&gt; # ... with 96 more rows</code></pre>
+<pre class="r"><code># rename historical cumulatives according to source
+hist_cumulatives_src &lt;- 
+hist_cumulatives_dt %&gt;% 
+    select(date, cum_oil, cum_gas, cum_wat) %&gt;% 
+    rename(cum_oil_hist = cum_oil, cum_gas_hist = cum_gas, cum_wat_hist = cum_wat) %&gt;% 
+    print()
+#&gt; # A tibble: 106 x 4
+#&gt;    date       cum_oil_hist cum_gas_hist cum_wat_hist
+#&gt;    &lt;date&gt;            &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt;
+#&gt;  1 2008-01-01           0            0            0 
+#&gt;  2 2008-02-01       49091.     7068009.         413.
+#&gt;  3 2008-03-01      132452.    19259180.         440.
+#&gt;  4 2008-04-01      206985.    30765621.         922.
+#&gt;  5 2008-05-01      332463.    49857492.       17202.
+#&gt;  6 2008-06-01      476250.    71369826.       17677.
+#&gt;  7 2008-07-01      642530.    96025129.       18093.
+#&gt;  8 2008-08-01      807974.   119948670.       18669.
+#&gt;  9 2008-09-01     1000237.   147475129.       19134.
+#&gt; 10 2008-10-01     1237411.   181232829.       19859.
+#&gt; # ... with 96 more rows</code></pre>
+<pre class="r"><code># combine simulator and historical dataframes. common variable is &quot;date&quot;
+cumulatives_all &lt;- full_join(hist_cumulatives_src, sim_cumulatives_src, by = &quot;date&quot;)
+cumulatives_all
+#&gt; # A tibble: 106 x 7
+#&gt;    date       cum_oil_hist cum_gas_hist cum_wat_hist cum_oil_sim
+#&gt;    &lt;date&gt;            &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt;       &lt;dbl&gt;
+#&gt;  1 2008-01-01           0            0            0            0
+#&gt;  2 2008-02-01       49091.     7068009.         413.       30840
+#&gt;  3 2008-03-01      132452.    19259180.         440.      120869
+#&gt;  4 2008-04-01      206985.    30765621.         922.      194702
+#&gt;  5 2008-05-01      332463.    49857492.       17202.      318898
+#&gt;  6 2008-06-01      476250.    71369826.       17677.      456145
+#&gt;  7 2008-07-01      642530.    96025129.       18093.      611809
+#&gt;  8 2008-08-01      807974.   119948670.       18669.      781866
+#&gt;  9 2008-09-01     1000237.   147475129.       19134.      944881
+#&gt; 10 2008-10-01     1237411.   181232829.       19859.     1166111
+#&gt; # ... with 96 more rows, and 2 more variables: cum_gas_sim &lt;dbl&gt;,
+#&gt; #   cum_wat_sim &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<div id="observations" class="section level2">
+<h2>Observations</h2>
+</div>
+<div id="how-close-cumulative-productions-are" class="section level2">
+<h2>How close cumulative productions are</h2>
+<div id="cumulative-oil.-historical-vs-simulator" class="section level3">
+<h3>Cumulative oil. Historical vs simulator</h3>
+<pre class="r"><code># Volve reservoir model dataset
+# plot historical vs simulator cum_oil
+cols &lt;- c(&quot;simulator&quot;=&quot;red&quot;, &quot;historical&quot;=&quot;blue&quot;) # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
+    geom_ribbon(aes(x = date, ymin= cum_oil_sim, ymax= cum_oil_hist), 
+                fill = &quot;dark green&quot;, alpha = 0.35) + 
+    geom_line(aes(x = date, y = cum_oil_sim, color = &quot;simulator&quot;)) +
+    geom_line(aes(x = date, y = cum_oil_hist, color = &quot;historical&quot;)) +
+    labs(title = &quot;Volve reservoir model. Comparison Cumulative Oil&quot;, 
+         subtitle = &quot;Historical vs Simulator&quot;, 
+         y = &quot;cumulative oil, sm3&quot;) +
+    scale_color_manual(name = &quot;Curve&quot;, values = cols)  # manual legend</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-45-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="cumulative-gas.-historical-vs-simulator" class="section level3">
+<h3>Cumulative gas. Historical vs simulator</h3>
+<pre class="r"><code># Volve reservoir model dataset
+# plot historical vs simulator cum_gas
+cols &lt;- c(&quot;simulator&quot;=&quot;red&quot;, &quot;historical&quot;=&quot;blue&quot;) # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
+    geom_ribbon(aes(x = date, ymin= cum_gas_sim, ymax= cum_gas_hist), 
+                fill = &quot;orange&quot;, alpha = 0.35) + 
+    geom_line(aes(x = date, y = cum_gas_sim, color = &quot;simulator&quot;), size = 1) +
+    geom_line(aes(x = date, y = cum_gas_hist, color = &quot;historical&quot;), size = 1) +
+    labs(title = &quot;Volve reservoir model. Comparison Cumulative Gas&quot;, 
+         subtitle = &quot;Historical vs Simulator&quot;, 
+         y = &quot;cumulative gas, sm3&quot;) +
+    scale_color_manual(name = &quot;Curve&quot;, values = cols)  # manual legend</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-46-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="cumulative-water.-historical-vs-simulator" class="section level3">
+<h3>Cumulative water. Historical vs simulator</h3>
+<pre class="r"><code># Volve reservoir model dataset
+# plot historical vs simulator cumulative water variable
+cols &lt;- c(&quot;simulator&quot;=&quot;red&quot;, &quot;historical&quot;=&quot;blue&quot;) # legend: colors and names
+ggplot(cumulatives_all) +
+    # shade the area between the curves
+    geom_ribbon(aes(x = date, ymin= cum_wat_sim, ymax= cum_wat_hist),
+                fill = &quot;cyan&quot;, alpha = 0.35) +
+    geom_line(aes(x = date, y = cum_wat_sim, color = &quot;simulator&quot;), size = 1) +
+    geom_line(aes(x = date, y = cum_wat_hist, color = &quot;historical&quot;), size = 1) +
+    labs(title = &quot;Volve reservoir model. Comparison Cumulative Water&quot;, 
+         subtitle = &quot;Historical vs Simulator&quot;, 
+         y = &quot;cumulative water, sm3&quot;) +
+    scale_color_manual(name = &quot;Curve&quot;, values = cols)  # manual legend</code></pre>
+<p><img src="/publications/external/volve-reservoir-model-evolution/README_files/figure-html/unnamed-chunk-47-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="conclusions" class="section level2">
+<h2>Conclusions</h2>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+</div>
+</div>

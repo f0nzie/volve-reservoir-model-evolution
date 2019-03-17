@@ -1,10 +1,22 @@
 ---
-title: "R Notebook"
+title: "GOR extraction from step block"
 output: html_notebook
 ---
 
 
+```{r setup, include = FALSE, error=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      comment = "#>",
+                      collapse = TRUE,
+                      error = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.align = 'center',
+                      autodep=FALSE
+                      )
 
+
+```
 
 ## Extract the GOR value
 ### Explanation

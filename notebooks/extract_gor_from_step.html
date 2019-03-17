@@ -1,0 +1,86 @@
+---
+title: "GOR extraction from step block"
+output: html_notebook
+---
+
+
+
+<div id="extract-the-gor-value" class="section level2">
+<h2>Extract the GOR value</h2>
+<div id="explanation" class="section level3">
+<h3>Explanation</h3>
+<ul>
+<li><code>.*GOR=.*?</code>: any characters up to “GOR=”</li>
+<li><code>(\\d+.\\d+)</code>: capture group of digits, dot. and digits</li>
+<li><code>.*</code>: any characters to the end</li>
+</ul>
+<pre class="r"><code># iterate through the list of pages: dates
+gor_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]  # put all pages text in a list
+    gor_row_txt &lt;- grep(&quot; GOR&quot;, page)
+    gor_value &lt;- sub(&quot;.*GOR=.*?(\\d+.\\d+).*&quot;, &quot;\\1&quot;, page[gor_row_txt])
+    
+    # dataframe
+    data.frame(gor = gor_value, stringsAsFactors = FALSE) 
+})
+#&gt; Error in lapply(seq_along(steps_info_txt_pages), function(x) {: object &#39;steps_info_txt_pages&#39; not found
+
+gor_df &lt;- do.call(&quot;rbind&quot;, gor_dfs)
+#&gt; Error in do.call(&quot;rbind&quot;, gor_dfs): object &#39;gor_dfs&#39; not found
+gor_df
+#&gt; Error in eval(expr, envir, enclos): object &#39;gor_df&#39; not found</code></pre>
+</div>
+</div>
+<div id="water-gas-ratio-wgr" class="section level2">
+<h2>Water Gas Ratio (WGR)</h2>
+<div id="section" class="section level3">
+<h3></h3>
+<pre class="r"><code># iterate through the list of pages: WATERCUT
+wgr_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]  # put all pages text in a list
+    row_txt &lt;- grep(&quot; WGR=&quot;, page)
+    wgr_value &lt;- sub(&quot;.*WGR=.*?(\\d+.\\d+).*&quot;, &quot;\\1&quot;, page[row_txt])
+    
+    # dataframe
+    data.frame(wgr = wgr_value, stringsAsFactors = FALSE) 
+})
+#&gt; Error in lapply(seq_along(steps_info_txt_pages), function(x) {: object &#39;steps_info_txt_pages&#39; not found
+
+wgr_df &lt;- do.call(&quot;rbind&quot;, wgr_dfs)
+#&gt; Error in do.call(&quot;rbind&quot;, wgr_dfs): object &#39;wgr_dfs&#39; not found
+wgr_df
+#&gt; Error in eval(expr, envir, enclos): object &#39;wgr_df&#39; not found</code></pre>
+<pre class="r"><code># iterate through the list of pages
+step_info_dfs &lt;- lapply(seq_along(steps_info_txt_pages), function(x) {
+    page &lt;- steps_info_txt_pages[[x]]             # put all pages text in a list
+    row_txt &lt;- grep(&quot; STEP&quot;, page)
+    date_value &lt;- sub(&quot;.*?(\\d{1,2}-[A-Z]{3}-\\d{4}).&quot;, &quot;\\1&quot;, page[row_txt])
+    # step number
+    step_value &lt;- sub(&quot;.*STEP.*?(\\d+)+.*&quot;, &quot;\\1&quot;, page[row_txt]) # extract the days
+    # get step in days
+    row_txt &lt;- grep(&quot; TIME&quot;, page)
+    days_value &lt;- sub(&quot;.*TIME=.*?(\\d+.\\d.)+.*&quot;, &quot;\\1&quot;, page[row_txt]) # extract the days
+    # Get the average pressure PAV
+    row_txt &lt;- grep(&quot; PAV&quot;, page)
+    pav_value &lt;- sub(&quot;.*PAV=.*?(\\d+.\\d+).*&quot;, &quot;\\1&quot;, page[row_txt])
+    # get the GOR
+    row_txt &lt;- grep(&quot; GOR&quot;, page)
+    gor_value &lt;- sub(&quot;.*GOR=.*?(\\d+.\\d+).*&quot;, &quot;\\1&quot;, page[row_txt])
+    # get the WGR
+    row_txt &lt;- grep(&quot; WGR=&quot;, page)
+    wgr_value &lt;- sub(&quot;.*WGR=.*?(\\d+.\\d+).*&quot;, &quot;\\1&quot;, page[row_txt])
+
+    
+    # dataframe
+    data.frame(step=step_value, date = date_value, days = days_value, 
+               pav_bar = pav_value, gor_m3m3 = gor_value, wgr_m3m3 = wgr_value,
+               stringsAsFactors = FALSE) 
+})
+#&gt; Error in lapply(seq_along(steps_info_txt_pages), function(x) {: object &#39;steps_info_txt_pages&#39; not found
+
+step_info &lt;- do.call(&quot;rbind&quot;, step_info_dfs)
+#&gt; Error in do.call(&quot;rbind&quot;, step_info_dfs): object &#39;step_info_dfs&#39; not found
+step_info
+#&gt; Error in eval(expr, envir, enclos): object &#39;step_info&#39; not found</code></pre>
+</div>
+</div>
