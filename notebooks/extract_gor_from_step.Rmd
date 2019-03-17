@@ -1,5 +1,6 @@
 ---
 title: "GOR extraction from step block"
+draft: true
 output:
   html_document:
     df_print: paged
@@ -16,8 +17,6 @@ knitr::opts_chunk$set(echo = TRUE,
                       fig.align = 'center',
                       autodep=FALSE
                       )
-
-
 ```
 
 ```{r read-prt-file}
