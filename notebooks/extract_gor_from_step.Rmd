@@ -1,6 +1,8 @@
 ---
 title: "GOR extraction from step block"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
@@ -16,6 +18,46 @@ knitr::opts_chunk$set(echo = TRUE,
                       )
 
 
+```
+
+```{r read-prt-file}
+library(dplyr)
+library(ggplot2)
+
+# read the Eclipse PRT output report
+proj_root <- rprojroot::find_rstudio_root_file()
+# had to zip the PRT file because it's 225 MB and too big for Github
+volve_2016_zip <- file.path(proj_root, "inst/rawdata", "VOLVE_2016.zip")
+temp <- tempdir()
+
+volve_2016_txt <- readLines(unzip(volve_2016_zip, exdir = temp))
+```
+
+Once with the contents of `VOLVE_2016.PRT` loaded in the object __volve_2016_txt__, we proceed to perform the extraction.
+
+We start by extracting few rows after the __STEP__ keyword.
+
+```{r}
+# get a list of rows from " STEP" 
+
+# find the rows where we find the word " STEP"
+step_rows <- grep("^ STEP", volve_2016_txt)
+
+# add rows ahead to where the keyword was found
+step_info_range <- lapply(seq_along(step_rows), function(x) 
+    c(step_rows[x], step_rows[x]+1:2))               # add two extra row indices
+
+step_info_range[[1]]   # sample for report page 1 only
+```
+```{r}
+# get the text from all pages and put them in a list
+steps_info_txt_pages <- lapply(seq_along(step_info_range), function(x) 
+    volve_2016_txt[step_info_range[[x]]])
+```
+
+For example, this is an example of the first page for step #1.
+```{r}
+steps_info_txt_pages[1]
 ```
 
 ## Extract the GOR value
