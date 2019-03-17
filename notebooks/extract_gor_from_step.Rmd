@@ -1,6 +1,8 @@
 ---
 title: "GOR extraction from step block"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
