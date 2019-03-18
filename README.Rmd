@@ -23,7 +23,7 @@ proj_root <- rprojroot::find_rstudio_root_file()
 
 ```{r, out.width = "900px", fig.cap="Step at 1 day", echo=FALSE}
  knitr::include_graphics(file.path(proj_root,
-                                   "/img/volve_north_view_start_end.png"))
+                                   "img/volve_north_view_start_end.png"))
 ```
 
 # A reproducible comparison of the Volve reservoir model
