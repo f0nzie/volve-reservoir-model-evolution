@@ -1,5 +1,9 @@
+A reproducible comparison of the Volve reservoir model
+================
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
+<img src="R:/github-oilgains/volve-reservoir-model-evolution//img/volve_north_view_start_end.png" title="Step at 1 day" alt="Step at 1 day" width="900px" style="display: block; margin: auto;" />
 
 # Introduction
 
@@ -89,7 +93,7 @@ library(dplyr)
 library(ggplot2)
 
 # read the Eclipse PRT output report
-proj_root <- rprojroot::find_rstudio_root_file()
+
 # had to zip the PRT file because it's 225 MB and too big for Github
 volve_2016_zip <- file.path(proj_root, "inst/rawdata", "VOLVE_2016.zip")
 temp <- tempdir()
@@ -462,6 +466,7 @@ Now, let’s save the data as a *.Rdata* file (readable from R) and as as
 *CSV* file (capable of being imported practically by any software).
 
 ``` r
+# data from STEP block.
 data_folder <- file.path(proj_root, "data")   # project folder
 # full filename, including path
 save(step_info, file = file.path(data_folder, "data_from_step.Rdata"))
@@ -489,7 +494,7 @@ ggplot(step_info, aes(x =date, y = pav_bar)) +
          y = "Average Pressure (PAV), bar")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
 
 #### Plot watercut vs time
 
@@ -501,7 +506,7 @@ ggplot(step_info, aes(x =date, y = wct_pct)) +
          y = "Watercut, percent")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-17-1.png" style="display: block; margin: auto;" />
 
 ### Plot all variables from `STEP` block
 
@@ -547,7 +552,7 @@ ggplot(step_info_gather, aes(x = date, y = value)) +
        subtitle = "Simulator output", y = "", x = "")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
 
 ## Merge cumulative oil with simulator steps
 
@@ -603,7 +608,7 @@ field_totals
 #### Save field totals to data files
 
 ``` r
-# save the data
+# save the field totals from BALANCE block.
 data_folder <- file.path(proj_root, "data")
 save(field_totals, file = file.path(data_folder, "field_totals_balance.Rdata"))
 write.csv(field_totals, file = file.path(data_folder, 
@@ -627,7 +632,7 @@ ggplot(field_totals, aes(x =date, y = wat_otw)) +
          y = "Water volume, sm3")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-21-1.png" style="display: block; margin: auto;" />
 
 Now, we know that the STEP dataframe has more rows than the BALANCE-AT
 dataframe. What we want is to correlate the step with the oil
@@ -697,7 +702,7 @@ ggplot(step_totals, aes(x = date, y = oil_otw)) +
     ggtitle("Cumulative Oil, sm3", subtitle = "Simulator")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-25-1.png" style="display: block; margin: auto;" />
 
 This ggplot for the cumulative gas.
 
@@ -708,7 +713,7 @@ ggplot(step_totals, aes(x = date, y = gas_otw)) +
          y = "Cumulative Gas, sm3")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-24-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-26-1.png" style="display: block; margin: auto;" />
 
 And this another one for cumulative water.
 
@@ -722,7 +727,7 @@ ggplot(step_totals, aes(x = date, y = wat_otw)) +
          y = "Cumulative Water, sm3")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-25-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-27-1.png" style="display: block; margin: auto;" />
 
 ### Calculate cumulatives for oil, gas and water for monthly period
 
@@ -997,7 +1002,7 @@ This saves the production history dataframe after the data
 transformations.
 
 ``` r
-# save historical data
+# save historical data after data transformations. 104 rows.
 data_folder <- file.path(proj_root, "data")
 save(hist_cumulatives, file = file.path(data_folder, "hist_cumulatives_104.Rdata"))
 write.csv(hist_cumulatives, file = file.path(data_folder, 
@@ -1157,7 +1162,7 @@ ggplot(hist_cumulatives_dt_gather, aes(x = date, y = value, color = var)) +
        subtitle = "Historical Production", y = "", x = "")
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-38-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-40-1.png" style="display: block; margin: auto;" />
 
 ### Save historical cumulatives with fixed dates
 
@@ -1197,7 +1202,7 @@ p3 <- ggplot(hist_cumulatives_dt, aes(x = date, y = cum_wat)) +
 grid.arrange(p1, p2, p3, ncol =1)
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-40-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
 
 ### Rename the variables according to source
 
@@ -1279,7 +1284,7 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-44-1.png" style="display: block; margin: auto;" />
 
 ### Cumulative gas. Historical vs simulator
 
@@ -1299,7 +1304,7 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-43-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-45-1.png" style="display: block; margin: auto;" />
 
 ### Cumulative water. Historical vs simulator
 
@@ -1319,7 +1324,7 @@ ggplot(cumulatives_all) +
     scale_color_manual(name = "Curve", values = cols)  # manual legend
 ```
 
-<img src="README_files/figure-gfm/unnamed-chunk-44-1.png" style="display: block; margin: auto;" />
+<img src="README_files/figure-gfm/unnamed-chunk-46-1.png" style="display: block; margin: auto;" />
 
 **Note.** This last plot for the cumulative water has been observed
 different when another reservoir engineer [Konstantin
@@ -1340,4 +1345,24 @@ two sources of water.
     output as zip file](https://zenodo.org/record/2586212). Zenodo
 
   - [Volve 2016 reservoir simulation PRT output
-    file](https://zenodo.org/record/2586209). Zenodo.
+    file](https://zenodo.org/record/2586209).
+    Zenodo.
+
+  - [data\_from\_step.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/data_from_step.CSV):
+    data from STEP
+    block.
+
+  - [field\_totals\_balance.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/field_totals_balance.CSV):
+    save the field totals from BALANCE
+    block.
+
+  - [hist\_cumulatives\_104.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/hist_cumulatives_104.CSV):
+    historical data after data transformations. 104
+    rows.
+
+  - [hist\_cumulatives\_dt.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/hist_cumulatives_dt.CSV):
+    historical data with complete dates. 106
+    rows.
+
+  - [production\_history.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/production_history_raw.CSV):
+    Production history read from Excel file. Raw.

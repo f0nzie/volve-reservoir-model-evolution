@@ -1,4 +1,5 @@
 ---
+title: A reproducible comparison of the Volve reservoir model
 output: github_document
 ---
 
@@ -15,6 +16,15 @@ knitr::opts_chunk$set(echo = TRUE,
                       )
 ```
 
+```{r, echo=FALSE}
+proj_root <- rprojroot::find_rstudio_root_file()
+```
+
+
+```{r, out.width = "900px", fig.cap="Step at 1 day", echo=FALSE}
+ knitr::include_graphics(file.path(proj_root,
+                                   "/img/volve_north_view_start_end.png"))
+```
 
 # Introduction 
 Continuing with the previous article [The fabrication of an artificial intelligence agent for reservoir history matching from the Volve dataset](http://blog.oilgainsanalytics.com/publications/the-fabrication-of-an-artificial-intelligence-agent-for-reservoir-history-matching-from-the-volve-dataset/), and the generation of a master dataset for an AI agent to perform history matching of reservoir models, we will extract additional data from the output of the Volve reservoir model, the `PRT` text file. This is the output "as-is", as we found it. No additional simulation runs have been performed over this model.
@@ -49,7 +59,7 @@ library(dplyr)
 library(ggplot2)
 
 # read the Eclipse PRT output report
-proj_root <- rprojroot::find_rstudio_root_file()
+
 # had to zip the PRT file because it's 225 MB and too big for Github
 volve_2016_zip <- file.path(proj_root, "inst/rawdata", "VOLVE_2016.zip")
 temp <- tempdir()
@@ -298,6 +308,7 @@ The simulation runs for `r tail(step_info$date,1) - head(step_info$date,1)` days
 Now, let's save the data as a _.Rdata_ file (readable from R) and as as _CSV_ file (capable of being imported practically by any software).
 
 ```{r}
+# data from STEP block.
 data_folder <- file.path(proj_root, "data")   # project folder
 # full filename, including path
 save(step_info, file = file.path(data_folder, "data_from_step.Rdata"))
@@ -391,7 +402,7 @@ field_totals
 #### Save field totals to data files
 
 ```{r}
-# save the data
+# save the field totals from BALANCE block.
 data_folder <- file.path(proj_root, "data")
 save(field_totals, file = file.path(data_folder, "field_totals_balance.Rdata"))
 write.csv(field_totals, file = file.path(data_folder, 
@@ -636,7 +647,7 @@ Observe that we've got `r nrow(hist_cumulatives) ` rows, which wouldn't match th
 This saves the production history dataframe after the data transformations.
 
 ```{r}
-# save historical data
+# save historical data after data transformations. 104 rows.
 data_folder <- file.path(proj_root, "data")
 save(hist_cumulatives, file = file.path(data_folder, "hist_cumulatives_104.Rdata"))
 write.csv(hist_cumulatives, file = file.path(data_folder, 
@@ -867,3 +878,15 @@ __Note.__ This last plot for the cumulative water has been observed different wh
 * [Volve 2016 dataset for reservoir simulation model. Compressed PRT output as zip file](https://zenodo.org/record/2586212). Zenodo
 
 * [Volve 2016 reservoir simulation PRT output file](https://zenodo.org/record/2586209). Zenodo.
+
+* [data_from_step.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/data_from_step.CSV): data from STEP block.
+
+* [field_totals_balance.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/field_totals_balance.CSV): save the field totals from BALANCE block.
+
+* [hist_cumulatives_104.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/hist_cumulatives_104.CSV): historical data after data transformations. 104 rows.
+
+* [hist_cumulatives_dt.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/hist_cumulatives_dt.CSV): historical data with complete dates. 106 rows.
+
+* [production_history.CSV](https://github.com/f0nzie/volve-reservoir-model-evolution/raw/master/data/production_history_raw.CSV): Production history read from Excel file. Raw.
+
+
