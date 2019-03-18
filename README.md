@@ -1,9 +1,9 @@
-A reproducible comparison of the Volve reservoir model
-================
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 <img src="R:/github-oilgains/volve-reservoir-model-evolution//img/volve_north_view_start_end.png" title="Step at 1 day" alt="Step at 1 day" width="900px" style="display: block; margin: auto;" />
+
+# A reproducible comparison of the Volve reservoir model
 
 # Introduction
 

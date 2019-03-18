@@ -1,5 +1,4 @@
 ---
-title: A reproducible comparison of the Volve reservoir model
 output: github_document
 ---
 
@@ -12,7 +11,8 @@ knitr::opts_chunk$set(echo = TRUE,
                       error = TRUE,
                       warning = FALSE,
                       message = FALSE,
-                      fig.align = 'center'
+                      fig.align = 'center',
+                      autodep=FALSE
                       )
 ```
 
@@ -25,6 +25,8 @@ proj_root <- rprojroot::find_rstudio_root_file()
  knitr::include_graphics(file.path(proj_root,
                                    "/img/volve_north_view_start_end.png"))
 ```
+
+# A reproducible comparison of the Volve reservoir model
 
 # Introduction 
 Continuing with the previous article [The fabrication of an artificial intelligence agent for reservoir history matching from the Volve dataset](http://blog.oilgainsanalytics.com/publications/the-fabrication-of-an-artificial-intelligence-agent-for-reservoir-history-matching-from-the-volve-dataset/), and the generation of a master dataset for an AI agent to perform history matching of reservoir models, we will extract additional data from the output of the Volve reservoir model, the `PRT` text file. This is the output "as-is", as we found it. No additional simulation runs have been performed over this model.
