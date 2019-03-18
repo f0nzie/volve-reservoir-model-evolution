@@ -5,3 +5,7 @@
 
 *.PRT
 *.swp
+
+README\.html
+
+README_files/
