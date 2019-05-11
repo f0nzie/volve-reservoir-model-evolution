@@ -403,13 +403,13 @@ step_info <- do.call("rbind", step_info_dfs) # put together all dataframes in li
 glimpse(step_info)
 #> Observations: 1,610
 #> Variables: 7
-#> $ step      <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1...
-#> $ date      <date> 2008-01-01, 2008-01-01, 2008-01-02, 2008-01-03, 200...
-#> $ time_days <dbl> 1.00, 1.63, 2.32, 3.50, 5.45, 8.22, 11.00, 14.61, 17...
-#> $ pav_bar   <dbl> 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329...
-#> $ wct_pct   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0...
-#> $ gor_m3m3  <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00...
-#> $ wgr_m3m3  <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0...
+#> $ step      <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,…
+#> $ date      <date> 2008-01-01, 2008-01-01, 2008-01-02, 2008-01-03, 2008-…
+#> $ time_days <dbl> 1.00, 1.63, 2.32, 3.50, 5.45, 8.22, 11.00, 14.61, 17.8…
+#> $ pav_bar   <dbl> 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6…
+#> $ wct_pct   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
+#> $ gor_m3m3  <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, …
+#> $ wgr_m3m3  <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
 ```
 
 Finally, we get all the vectors for **step** number, **date**, **date**,
@@ -435,7 +435,7 @@ has 1610 rows and 7 columns.
 #>  8     8 2008-01-14     14.6     330.       0        0        0
 #>  9     9 2008-01-17     17.8     330.       0        0        0
 #> 10    10 2008-01-21     21       330.       0        0        0
-#> # ... with 1,600 more rows
+#> # … with 1,600 more rows
 ```
 
 These are the names of the variables in the dataframe:
@@ -536,7 +536,7 @@ step_info %>%
 #>  8 2008-01-14 pav_bar  330.
 #>  9 2008-01-17 pav_bar  330.
 #> 10 2008-01-21 pav_bar  330.
-#> # ... with 6,430 more rows
+#> # … with 6,430 more rows
   
 # plot production variables from the STEP block in the PRT file
 
@@ -602,7 +602,7 @@ field_totals
 #>  8 2008-03-01    61 21925419 21967455   42035       0  6650055  320.
 #>  9 2008-03-11    71 21897024 21967455   70430       0 11113293  314.
 #> 10 2008-03-21    81 21867231 21967455  100223       1 15777548  308.
-#> # ... with 330 more rows
+#> # … with 330 more rows
 ```
 
 #### Save field totals to data files
@@ -679,7 +679,7 @@ left_join(step_info, field_totals, by = "date") %>%
 #>  8 2008-03-11      71      71    21    314.       0     157.        0
 #>  9 2008-03-21      81      81    23    308.       0     156.        0
 #> 10 2008-03-21      81.5    81    24    308        0     156.        0
-#> # ... with 514 more rows, and 6 more variables: ocip <dbl>, ooip <dbl>,
+#> # … with 514 more rows, and 6 more variables: ocip <dbl>, ooip <dbl>,
 #> #   oil_otw <dbl>, wat_otw <dbl>, gas_otw <dbl>, pav <dbl>
 ```
 
@@ -783,7 +783,7 @@ step_totals %>%
 #>  8 2008-08-01  2008     8  170057 26420155  227653  781866   1.21e8  868196
 #>  9 2008-09-01  2008     9  163015 25205884  137169  944881   1.46e8 1005365
 #> 10 2008-10-01  2008    10  221230 33570835  317736 1166111   1.80e8 1323101
-#> # ... with 96 more rows
+#> # … with 96 more rows
 ```
 
 ### Filling the date gaps with periodic dates
@@ -816,7 +816,7 @@ dates_complete
 #>  8 2008-08-01       0       0       0
 #>  9 2008-09-01       0       0       0
 #> 10 2008-10-01       0       0       0
-#> # ... with 96 more rows
+#> # … with 96 more rows
 ```
 
 So, there are 106 months from start to end of production.
@@ -862,7 +862,7 @@ left_join(dates_complete, sim_cumulatives, by = "date") %>%
 #>  8 2008-08-01  781866 120979880  868196  227653 26420155  227653
 #>  9 2008-09-01  944881 146185764 1005365  137169 25205884  137169
 #> 10 2008-10-01 1166111 179756599 1323101  317736 33570835  317736
-#> # ... with 96 more rows
+#> # … with 96 more rows
 ```
 
 The negative volume of water and oil are possibly volume corrections by
@@ -914,7 +914,7 @@ prod_hist
 #>  8 15/9-F-5         5769  2007    12 NULL      NULL  NULL  NULL  NULL 
 #>  9 15/9-F-4         5693  2008     1 0         NULL  NULL  NULL  NULL 
 #> 10 15/9-F-5         5769  2008     1 0         NULL  NULL  NULL  NULL 
-#> # ... with 519 more rows, and 1 more variable: WI <fct>
+#> # … with 519 more rows, and 1 more variable: WI <fct>
 ```
 
 ### Save raw production history to data files
@@ -990,7 +990,7 @@ prod_hist %>%
 #>  8 2008-09-01 192263.  2.75e7   464.       0      0  1.00e6  1.47e8  19134.
 #>  9 2008-10-01 237174.  3.38e7   725.       0      0  1.24e6  1.81e8  19859.
 #> 10 2008-11-01 250325.  3.57e7  2580.       0      0  1.49e6  2.17e8  22439.
-#> # ... with 94 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
+#> # … with 94 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
 ```
 
 Observe that we’ve got 104 rows, which wouldn’t match the rows from the
@@ -1029,7 +1029,7 @@ df
 #>  8 2008-08-01       0       0       0
 #>  9 2008-09-01       0       0       0
 #> 10 2008-10-01       0       0       0
-#> # ... with 96 more rows
+#> # … with 96 more rows
 ```
 
 Remember that we created this date sequence above. This sequence had 106
@@ -1050,7 +1050,7 @@ dates_complete
 #>  8 2008-08-01       0       0       0
 #>  9 2008-09-01       0       0       0
 #> 10 2008-10-01       0       0       0
-#> # ... with 96 more rows
+#> # … with 96 more rows
 ```
 
 ### Fill the dates gap in the production history dataframe
@@ -1106,7 +1106,7 @@ left_join(dates_complete, hist_cumulatives, by = "date") %>%
 #>  8 2008-08-01  8.08e5  1.20e8  18669. 165444.  2.39e7   577.       0      0
 #>  9 2008-09-01  1.00e6  1.47e8  19134. 192263.  2.75e7   464.       0      0
 #> 10 2008-10-01  1.24e6  1.81e8  19859. 237174.  3.38e7   725.       0      0
-#> # ... with 96 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
+#> # … with 96 more rows, and 2 more variables: cum_gi <dbl>, cum_wi <dbl>
 ```
 
 Great\! We got the dataframe *hist\_cumulatives\_dt*, with 106 rows and
@@ -1137,7 +1137,7 @@ hist_cumulatives_dt %>%
 #>  8 2008-08-01 vol_oil 165444.
 #>  9 2008-09-01 vol_oil 192263.
 #> 10 2008-10-01 vol_oil 237174.
-#> # ... with 308 more rows
+#> # … with 308 more rows
 ```
 
 And this is the plot of the cumulative variables from the production
@@ -1249,7 +1249,7 @@ cumulatives_all
 #>  8 2008-08-01      807974.   119948670.       18669.      781866
 #>  9 2008-09-01     1000237.   147475129.       19134.      944881
 #> 10 2008-10-01     1237411.   181232829.       19859.     1166111
-#> # ... with 96 more rows, and 2 more variables: cum_gas_sim <dbl>,
+#> # … with 96 more rows, and 2 more variables: cum_gas_sim <dbl>,
 #> #   cum_wat_sim <dbl>
 ```
 
